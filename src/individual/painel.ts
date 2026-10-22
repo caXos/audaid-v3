@@ -29,6 +29,7 @@ import { lerPauta, ocupanteDoMinuto, type EntradaPauta } from '../regras/pauta';
 import {
   aplicabilidade,
   descricaoTipo,
+  estadoVideo,
   ehSumarissimo,
   escolhaDaDescricao,
   faseDoProcesso,
@@ -251,8 +252,10 @@ class Formulario {
 
   private readonly selBase = h('select');
   private readonly chkVideo = h('input', { type: 'checkbox' });
+  private readonly rotuloVideo = h('label', { class: 'rotulo-check' }, this.chkVideo, ' por videoconferência');
   private readonly selFase = h('select');
   private readonly selSemana = h('select');
+  private readonly txtFase = h('span', { class: 'suave' });
   private readonly txtRito = h('span', { class: 'suave' });
   private readonly resultadoTipo = h('div', { class: 'resultado-tipo' });
   private readonly avisoDigital = h('div', { class: 'aviso-digital' });
@@ -309,15 +312,15 @@ class Formulario {
   private preencherPadroes() {
     const salaAntiga = this.d.antiga?.salaFisica?.id;
     if (salaAntiga !== undefined && this.d.salas.some((s) => s.id === salaAntiga)) this.selSala.value = String(salaAntiga);
+    // D42: a fase vem sempre do processo (não da audiência antiga).
     this.selFase.value = faseDoProcesso(this.d.processo.faseProcessual);
-    // Com audiência antiga, o tipo dela vem pré-selecionado (o caso comum: só muda data/hora).
+    this.txtFase.textContent = `fase atual do processo: ${faseDoProcesso(this.d.processo.faseProcessual)}`;
+    // Da audiência antiga vem só o tipo base (o caso comum: só muda data/hora). Vídeo segue o
+    // processo (D42) e Semana Nacional começa vazia, por ser coisa de evento específico.
     const escolha = this.d.antiga?.tipo?.descricao ? escolhaDaDescricao(this.d.antiga.tipo.descricao) : undefined;
-    if (escolha) {
-      this.selBase.value = escolha.base;
-      this.chkVideo.checked = escolha.video;
-      if (aplicabilidade(escolha.base, escolha.fase).fase) this.selFase.value = escolha.fase;
-      this.selSemana.value = escolha.semana;
-    }
+    if (escolha) this.selBase.value = escolha.base;
+    this.chkVideo.checked = false;
+    this.selSemana.value = 'nenhuma';
     this.inGigsPrazo.value = '2';
   }
 
@@ -363,7 +366,8 @@ class Formulario {
           vazio(),
           this.pautaMini,
           ...linha('Tipo base', this.selBase),
-          ...linha('Variações', h('label', {}, this.chkVideo, ' por videoconferência'), this.selFase, this.selSemana),
+          ...linha('Variações', this.rotuloVideo, this.selSemana),
+          ...linha('Fase', this.selFase, this.txtFase),
           ...linha('Rito', this.txtRito),
           this.resultadoTipo,
           this.avisoDigital,
@@ -470,7 +474,18 @@ class Formulario {
     // Tipo (D6)
     const e = this.escolhaTipo();
     const ap = aplicabilidade((e?.base ?? 'Conciliação') as TipoBase, this.selFase.value as Fase);
-    this.chkVideo.disabled = !e || !ap.video;
+    // D42: vídeo segue o processo (100% Digital = sempre por vídeo).
+    const ev = e ? estadoVideo(e.base, Boolean(this.d.processo.juizoDigital)) : { habilitada: false };
+    this.chkVideo.disabled = !ev.habilitada;
+    if (ev.marcada !== undefined) this.chkVideo.checked = ev.marcada;
+    this.rotuloVideo.classList.toggle('desabilitado', !ev.habilitada);
+    this.rotuloVideo.title = !e
+      ? ''
+      : !ap.video
+        ? 'Este tipo não tem versão por videoconferência.'
+        : this.d.processo.juizoDigital
+          ? 'Processo 100% Digital: a audiência é sempre por videoconferência.'
+          : '';
     this.selFase.disabled = !e || !ap.fase;
     this.selSemana.disabled = !e || !ap.semana;
     const opcaoExecucao = this.selSemana.querySelector<HTMLOptionElement>('option[value="execucao"]');
@@ -544,9 +559,16 @@ class Formulario {
     this.pauta = { chave, carregando: true };
     clearTimeout(this.temporizadorPauta);
     this.temporizadorPauta = setTimeout(async () => {
-      const r = await pjeGet<PautaDia>(this.ambiente.origem + caminhos.pautaDia(idSala, data), { xsrfToken: lerSessao(document.cookie).xsrfToken });
+      let novo: typeof this.pauta;
+      try {
+        const r = await pjeGet<PautaDia>(this.ambiente.origem + caminhos.pautaDia(idSala, data), { xsrfToken: lerSessao(document.cookie).xsrfToken });
+        novo = r.ok ? { chave, carregando: false, entradas: lerPauta(r.dados) } : { chave, carregando: false, erro: `Erro ao consultar a pauta: ${r.erro.mensagem}` };
+      } catch (e) {
+        // Nunca deixar o formulário preso em "consultando".
+        novo = { chave, carregando: false, erro: `Erro ao ler a pauta: ${e instanceof Error ? e.message : String(e)}` };
+      }
       if (!this.vivo() || this.pauta.chave !== chave) return;
-      this.pauta = r.ok ? { chave, carregando: false, entradas: lerPauta(r.dados) } : { chave, carregando: false, erro: `Erro ao consultar a pauta: ${r.erro.mensagem}` };
+      this.pauta = novo;
       this.atualizar();
     }, 300);
   }
@@ -635,7 +657,18 @@ class Formulario {
     this.btnCopiar.disabled = true;
     this.atualizar();
     const transporte = transportePje(this.ambiente.origem, () => lerSessao(document.cookie).xsrfToken, this.opcoes.simulacao);
-    const resultado = await executarDesignacao(pedido, transporte, (passos) => this.vivo() && this.desenharPassos(passos));
+    let resultado: ResultadoExecucao;
+    try {
+      resultado = await executarDesignacao(pedido, transporte, (passos) => this.vivo() && this.desenharPassos(passos));
+    } catch (e) {
+      // Erro inesperado no código: mostra e libera o botão, em vez de travar em "Executando…".
+      resultado = {
+        desfecho: 'falha',
+        resumo: `Erro inesperado no AudAid: ${e instanceof Error ? e.message : String(e)}. Confira no PJe o estado do processo.`,
+        passos: [],
+        acoes: [],
+      };
+    }
     if (!this.vivo()) return;
     this.executando = false;
     this.ultimoResultado = resultado;

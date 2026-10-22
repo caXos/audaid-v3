@@ -20,6 +20,8 @@ function jwt(payload: object): string {
 }
 
 let orgaoLogado = 174;
+let processoDigital = true;
+let faseProcesso = 'CONHECIMENTO';
 const escritas: { metodo: string; url: string }[] = [];
 
 const tipos = DESCRICOES_CONHECIDAS.map((descricao, i) => ({ id: i + 1, descricao }));
@@ -34,7 +36,7 @@ function responder(url: string, init?: RequestInit): Response {
   const json = (d: unknown) => new Response(JSON.stringify(d), { status: 200 });
   const u = new URL(url);
   if (u.pathname.endsWith('/processos/id/100')) {
-    return json({ id: 100, numero: '0000100-00.2026.5.09.0000', classeJudicial: { sigla: 'ATOrd' }, orgaoJulgador: { id: 174, descricao: 'CEJUSC' }, juizoDigital: true, faseProcessual: 'CONHECIMENTO' });
+    return json({ id: 100, numero: '0000100-00.2026.5.09.0000', classeJudicial: { sigla: 'ATOrd' }, orgaoJulgador: { id: 174, descricao: 'CEJUSC' }, juizoDigital: processoDigital, faseProcessual: faseProcesso });
   }
   if (u.pathname.endsWith('/processos/id/100/audiencias')) {
     return json([
@@ -46,6 +48,8 @@ function responder(url: string, init?: RequestInit): Response {
   if (u.pathname.endsWith('/salasaudiencias')) return json([{ id: 503, nome: 'Sala 01' }, { id: 504, nome: 'Sala 02' }]);
   if (u.pathname.endsWith('/calendarioeventos')) return json(calendario);
   if (u.pathname.endsWith('/classificacoes/dia')) {
+    // Dia sem audiência nem vaga: o PJe real responde só {dia}, sem pautasDoDia.
+    if (u.searchParams.get('data') === '2026-12-16') return json({ dia: '2026-12-16' });
     return json({
       dia: u.searchParams.get('data'),
       pautasDoDia: [
@@ -60,6 +64,8 @@ function responder(url: string, init?: RequestInit): Response {
 
 beforeEach(() => {
   orgaoLogado = 174;
+  processoDigital = true;
+  faseProcesso = 'CONHECIMENTO';
   escritas.length = 0;
   Object.defineProperty(document, 'cookie', {
     configurable: true,
@@ -97,9 +103,43 @@ describe('Controle Individual (entrega 3, simulação)', () => {
     const [sala, base] = p.sel();
     expect(sala!.value).toBe('503');
     expect(base!.value).toBe('Conciliação');
+    // Processo 100% Digital: vídeo marcado e travado (D42).
     expect(p.inp('checkbox').checked).toBe(true);
+    expect(p.inp('checkbox').disabled).toBe(true);
     expect(p.texto()).toContain('Conciliação em Conhecimento por videoconferência');
     expect(p.botao(/Simular redesignação/).disabled).toBe(true);
+  });
+
+  it('processo comum em execução: vídeo livre e desmarcado, fase Execução, mesmo com a antiga em Conhecimento por vídeo (D42)', async () => {
+    processoDigital = false;
+    faseProcesso = 'EXECUCAO';
+    const p = abrir();
+    await vi.waitFor(() => expect(p.texto()).toContain('Redesignar audiência'));
+    const [, base, semana, fase] = p.sel(); // ordem na tela: sala, tipo base, semana, fase, GIGS
+    expect(base!.value).toBe('Conciliação');
+    expect(p.inp('checkbox').checked).toBe(false);
+    expect(p.inp('checkbox').disabled).toBe(false);
+    expect(fase!.value).toBe('Execução');
+    expect(fase!.disabled).toBe(false);
+    expect(semana!.value).toBe('nenhuma');
+    expect(p.texto()).toContain('fase atual do processo: Execução');
+    expect(p.texto()).toContain('Será designada: Conciliação em Execução');
+    p.mudar(p.inp('checkbox'), true);
+    expect(p.texto()).toContain('Conciliação em Execução por videoconferência');
+    // Tipo que não é conciliação: a fase fica desabilitada.
+    p.mudar(base!, 'Instrução');
+    expect(fase!.disabled).toBe(true);
+    expect(p.inp('checkbox').disabled).toBe(false);
+  });
+
+  it('dia sem audiência nem vaga ({dia} sem pautasDoDia) libera o horário', async () => {
+    const p = abrir();
+    await vi.waitFor(() => expect(p.texto()).toContain('Redesignar audiência'));
+    p.mudar(p.inp('date'), '2026-12-16');
+    p.mudar(p.inp('time'), '09:00');
+    await vi.waitFor(() => expect(p.texto()).toContain('09:00 está livre na sala'), { timeout: 2000 });
+    expect(p.texto()).toContain('Nenhuma audiência nem vaga nesta sala neste dia');
+    expect(p.botao(/Simular/).disabled).toBe(false);
   });
 
   it('horário ocupado bloqueia; "Encaixar" acha o próximo minuto livre', async () => {

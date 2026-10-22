@@ -36,7 +36,7 @@ button {
 button.secundario { background: #fff; color: var(--cor-marca); }
 button.perigo { border-color: var(--cor-erro); background: #fff; color: var(--cor-erro); }
 button.perigo-cheio { border-color: var(--cor-erro); background: var(--cor-erro); color: #fff; }
-button:disabled { opacity: .5; cursor: default; }
+button:disabled { opacity: .5; cursor: not-allowed; }
 dialog {
   max-width: 520px; width: calc(100% - 32px); border: 1px solid var(--cor-borda); border-radius: 12px;
   padding: 20px 24px; color: var(--cor-texto); box-shadow: 0 12px 40px rgba(0,0,0,.25);
@@ -52,7 +52,7 @@ dialog li { margin: 6px 0; }
 input, select { font: inherit; padding: 5px 8px; border: 1px solid var(--cor-borda); border-radius: 6px; background: #fff; color: var(--cor-texto); }
 input[type="number"] { width: 80px; }
 input[type="color"] { padding: 0; width: 44px; height: 32px; }
-input:disabled, select:disabled { background: var(--cor-fundo-2); color: var(--cor-suave); }
+input:disabled, select:disabled { background: #d5dbe3; color: var(--cor-suave); border-color: #c3cad4; cursor: not-allowed; }
 table { width: 100%; border-collapse: collapse; }
 th { text-align: left; font-size: 13px; color: var(--cor-suave); font-weight: 600; padding: 4px 6px; }
 td { padding: 4px 6px; border-top: 1px solid #eef1f4; }

@@ -15,6 +15,7 @@ import {
   descricaoTipo,
   escolhaDaDescricao,
   ehSumarissimo,
+  estadoVideo,
   faseDoProcesso,
   todasEscolhas,
 } from '../src/regras/tipoComposto';
@@ -131,6 +132,14 @@ describe('tipo composto (D6)', () => {
     expect(escolhaDaDescricao('Conciliação em Conhecimento por videoconferência')).toMatchObject({ base: 'Conciliação', video: true, fase: 'Conhecimento' });
     expect(escolhaDaDescricao('Instrução (rito sumaríssimo)')).toMatchObject({ base: 'Instrução', video: false, sumarissimo: true });
     expect(escolhaDaDescricao('Tipo que não existe')).toBeUndefined();
+  });
+
+  it('checkbox de vídeo segue o processo (D42)', () => {
+    expect(estadoVideo('Conciliação', false)).toEqual({ habilitada: true });
+    expect(estadoVideo('Conciliação', true)).toEqual({ habilitada: false, marcada: true });
+    expect(estadoVideo('Instrução', true)).toEqual({ habilitada: false, marcada: true });
+    expect(estadoVideo('Julgamento', false)).toEqual({ habilitada: false, marcada: false });
+    expect(estadoVideo('Julgamento', true)).toEqual({ habilitada: false, marcada: false });
   });
 
   it('rito e fase vêm do processo', () => {

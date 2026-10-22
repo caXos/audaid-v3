@@ -14,9 +14,11 @@ export interface EntradaPauta {
  * Normaliza a pauta do dia. Só o horário de início importa: o `horaFinal` dessa resposta é
  * derivado da entrada seguinte e não representa duração (D28, §6 item 9).
  */
-export function lerPauta(pauta: PautaDia): EntradaPauta[] {
-  return pauta.pautasDoDia
-    .filter((p) => p.pautaAudienciaHorario?.horaInicial)
+export function lerPauta(pauta: Partial<PautaDia> | null | undefined): EntradaPauta[] {
+  // Dia sem audiência nem vaga: o PJe responde só `{ "dia": "…" }`, sem `pautasDoDia`.
+  const lista = Array.isArray(pauta?.pautasDoDia) ? pauta.pautasDoDia : [];
+  return lista
+    .filter((p) => p?.pautaAudienciaHorario?.horaInicial)
     .map((p) => ({
       hora: (p.pautaAudienciaHorario?.horaInicial ?? '').slice(0, 5),
       tipo: p.idProcesso == null ? ('vaga' as const) : ('audiencia' as const),

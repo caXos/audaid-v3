@@ -27,7 +27,12 @@ input[type="number"] { width: 70px; }
 .rodape-form { display: flex; gap: 10px; align-items: flex-start; margin-top: 10px; }
 .pendencias { margin: 0; padding-left: 18px; font-size: 12px; color: var(--cor-aviso); }
 .pendencias:empty::before { content: 'Tudo pronto.'; color: var(--cor-ok); margin-left: -18px; }
-button.acao:disabled { opacity: .45; cursor: default; }
+button.acao:disabled { opacity: .45; cursor: not-allowed; }
+/* D42: campo que não se aplica fica visivelmente desabilitado. */
+select:disabled, input:disabled { background: #d5dbe3; color: #5b6878; border-color: #c3cad4; cursor: not-allowed; }
+.rotulo-check { cursor: pointer; }
+.rotulo-check.desabilitado { color: #8a94a3; cursor: not-allowed; }
+button:disabled { cursor: not-allowed; }
 .passo { border-top: 1px solid #eef1f4; padding: 6px 0; }
 .passo:first-child { border-top: 0; }
 .passo-topo { display: flex; gap: 8px; align-items: center; }

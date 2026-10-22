@@ -120,6 +120,24 @@ export function escolhaDaDescricao(descricao: string): EscolhaTipo | undefined {
   return todasEscolhas().find((e) => normalizarDescricao(descricaoTipo(e)) === alvo);
 }
 
+export interface EstadoVideo {
+  habilitada: boolean;
+  /** Valor imposto; `undefined` = o usuário escolhe. */
+  marcada?: boolean;
+}
+
+/**
+ * Checkbox "por videoconferência" (D42):
+ * - tipo sem versão por vídeo (Julgamento): desabilitada e desmarcada;
+ * - processo 100% Digital: desabilitada e marcada (não pode haver audiência presencial);
+ * - processo comum: habilitada, à escolha do usuário (começa desmarcada).
+ */
+export function estadoVideo(base: TipoBase, juizoDigital: boolean): EstadoVideo {
+  if (!aplicabilidade(base, 'Conhecimento').video) return { habilitada: false, marcada: false };
+  if (juizoDigital) return { habilitada: false, marcada: true };
+  return { habilitada: true };
+}
+
 export function ehSumarissimo(siglaClasse: string | undefined): boolean {
   return siglaClasse?.toUpperCase() === 'ATSUM';
 }

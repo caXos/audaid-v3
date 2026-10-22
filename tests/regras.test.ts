@@ -7,6 +7,7 @@ import { conferirTiposConhecidos, DESCRICOES_CONHECIDAS, resolverTipo } from '..
 import calendarioJson from './fixtures/calendario-cejusc.json';
 import pautaComVagaJson from './fixtures/pauta-com-vaga.json';
 import pautaSemVagasJson from './fixtures/pauta-sem-vagas.json';
+import pautaDiaVazio from './fixtures/pauta-dia-vazio.json';
 
 const calendario = calendarioJson as EventoCalendario[];
 const pautaComVaga = pautaComVagaJson as PautaDia;
@@ -75,6 +76,12 @@ describe('lerPauta e ocupanteDoMinuto (D28, D33)', () => {
     const e = lerPauta(pautaComVaga);
     const ocupante = ocupanteDoMinuto(e, '08:30');
     expect(ocupanteDoMinuto(e, '08:30', ocupante?.idProcesso)).toBeUndefined();
+  });
+
+  it('dia vazio: o PJe responde só {dia}, sem pautasDoDia', () => {
+    expect(lerPauta(pautaDiaVazio)).toEqual([]);
+    expect(lerPauta(null)).toEqual([]);
+    expect(lerPauta({ dia: '2026-12-16', pautasDoDia: 'lixo' } as unknown as PautaDia)).toEqual([]);
   });
 
   it('sala sem vagas configuradas só tem audiências', () => {

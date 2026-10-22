@@ -83,6 +83,12 @@ describe('executor: caminho feliz', () => {
     expect(ordem(t)).toEqual(['GET /pje-comum-api/api/pautasaudiencias/classificacoes/dia', 'POST /pje-comum-api/api/pautasaudiencias/audiencias']);
   });
 
+  it('dia sem nenhuma audiência nem vaga (resposta só com {dia}) conta como livre', async () => {
+    const t = falso(roteiroPadrao({ pauta: () => ok({ dia: '2026-10-27' }) }));
+    const r = await executarDesignacao(pedido(), t);
+    expect(r.desfecho).toBe('sucesso');
+  });
+
   it('redesigna (PUT) quando há audiência no órgão (D32)', async () => {
     const t = falso(roteiroPadrao());
     const antiga = { id: 444, dataInicio: '2026-10-20T10:10:00', descricaoTipo: 'Conciliação', nomeSala: 'Sala 01' };
