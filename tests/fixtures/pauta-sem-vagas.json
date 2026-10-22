@@ -1,0 +1,133 @@
+{
+  "dia": "2026-12-08",
+  "pautasDoDia": [
+    {
+      "idProcesso": 900001,
+      "nrProcesso": "0000000-01.2026.5.09.0000",
+      "status": "M",
+      "tipo": {
+        "id": 23,
+        "descricao": "Encerramento de instrução por videoconferência"
+      },
+      "pautaAudienciaHorario": {
+        "horaInicial": "13:15:00",
+        "horaFinal": "13:20:00",
+        "id": 800002
+      },
+      "bloqueado": false,
+      "data": "2026-12-08"
+    },
+    {
+      "idProcesso": 900002,
+      "nrProcesso": "0000000-02.2026.5.09.0000",
+      "status": "M",
+      "tipo": {
+        "id": 9,
+        "descricao": "Encerramento de instrução"
+      },
+      "pautaAudienciaHorario": {
+        "horaInicial": "13:20:00",
+        "horaFinal": "13:25:00",
+        "id": 800003
+      },
+      "bloqueado": false,
+      "data": "2026-12-08"
+    },
+    {
+      "idProcesso": 900003,
+      "nrProcesso": "0000000-03.2026.5.09.0000",
+      "status": "M",
+      "tipo": {
+        "id": 9,
+        "descricao": "Encerramento de instrução"
+      },
+      "pautaAudienciaHorario": {
+        "horaInicial": "13:25:00",
+        "horaFinal": "13:30:00",
+        "id": 800004
+      },
+      "bloqueado": false,
+      "data": "2026-12-08"
+    },
+    {
+      "idProcesso": 900004,
+      "nrProcesso": "0000000-04.2026.5.09.0000",
+      "status": "M",
+      "tipo": {
+        "id": 22,
+        "descricao": "Instrução por videoconferência"
+      },
+      "pautaAudienciaHorario": {
+        "horaInicial": "13:30:00",
+        "horaFinal": "14:30:00",
+        "id": 800005
+      },
+      "bloqueado": false,
+      "data": "2026-12-08"
+    },
+    {
+      "idProcesso": 900005,
+      "nrProcesso": "0000000-05.2026.5.09.0000",
+      "status": "M",
+      "tipo": {
+        "id": 22,
+        "descricao": "Instrução por videoconferência"
+      },
+      "pautaAudienciaHorario": {
+        "horaInicial": "14:30:00",
+        "horaFinal": "15:10:00",
+        "id": 800006
+      },
+      "bloqueado": false,
+      "data": "2026-12-08"
+    },
+    {
+      "idProcesso": 900006,
+      "nrProcesso": "0000000-06.2026.5.09.0000",
+      "status": "M",
+      "tipo": {
+        "id": 25,
+        "descricao": "Instrução por videoconferência (rito sumaríssimo)"
+      },
+      "pautaAudienciaHorario": {
+        "horaInicial": "15:10:00",
+        "horaFinal": "15:50:00",
+        "id": 800007
+      },
+      "bloqueado": false,
+      "data": "2026-12-08"
+    },
+    {
+      "idProcesso": 900007,
+      "nrProcesso": "0000000-07.2026.5.09.0000",
+      "status": "M",
+      "tipo": {
+        "id": 25,
+        "descricao": "Instrução por videoconferência (rito sumaríssimo)"
+      },
+      "pautaAudienciaHorario": {
+        "horaInicial": "15:50:00",
+        "horaFinal": "16:30:00",
+        "id": 800008
+      },
+      "bloqueado": false,
+      "data": "2026-12-08"
+    },
+    {
+      "idProcesso": 900008,
+      "nrProcesso": "0000000-08.2026.5.09.0000",
+      "status": "M",
+      "tipo": {
+        "id": 25,
+        "descricao": "Instrução por videoconferência (rito sumaríssimo)"
+      },
+      "pautaAudienciaHorario": {
+        "horaInicial": "16:30:00",
+        "horaFinal": "16:31:00",
+        "id": 800009
+      },
+      "bloqueado": false,
+      "data": "2026-12-08"
+    }
+  ]
+}

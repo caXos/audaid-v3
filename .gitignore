@@ -1,0 +1,8 @@
+node_modules/
+dist/
+*.zip
+*.xpi
+*.har
+.DS_Store
+Thumbs.db
+CLAUDE.local.md

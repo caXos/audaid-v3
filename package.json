@@ -1,0 +1,21 @@
+{
+  "name": "audaid-v3",
+  "version": "3.0.0",
+  "private": true,
+  "description": "AudAid: assistente para assistentes de audiência dos TRTs que usam o PJe (extensão para Firefox, Chrome e Edge).",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm run test && npm run build"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
+  }
+}

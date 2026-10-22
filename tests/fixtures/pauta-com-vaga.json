@@ -1,0 +1,225 @@
+{
+  "dia": "2026-11-26",
+  "pautasDoDia": [
+    {
+      "idProcesso": 900001,
+      "nrProcesso": "0000000-01.2026.5.09.0000",
+      "status": "M",
+      "tipo": {
+        "id": 18,
+        "descricao": "Conciliação em Conhecimento por videoconferência"
+      },
+      "pautaAudienciaHorario": {
+        "horaInicial": "08:30:00",
+        "horaFinal": "08:40:00",
+        "id": 800002
+      },
+      "bloqueado": false,
+      "data": "2026-11-26"
+    },
+    {
+      "idProcesso": 900002,
+      "nrProcesso": "0000000-02.2026.5.09.0000",
+      "status": "M",
+      "tipo": {
+        "id": 18,
+        "descricao": "Conciliação em Conhecimento por videoconferência"
+      },
+      "pautaAudienciaHorario": {
+        "horaInicial": "08:40:00",
+        "horaFinal": "08:50:00",
+        "id": 800003
+      },
+      "bloqueado": false,
+      "data": "2026-11-26"
+    },
+    {
+      "idProcesso": 900003,
+      "nrProcesso": "0000000-03.2026.5.09.0000",
+      "status": "M",
+      "tipo": {
+        "id": 18,
+        "descricao": "Conciliação em Conhecimento por videoconferência"
+      },
+      "pautaAudienciaHorario": {
+        "horaInicial": "08:50:00",
+        "horaFinal": "09:00:00",
+        "id": 800004
+      },
+      "bloqueado": false,
+      "data": "2026-11-26"
+    },
+    {
+      "idProcesso": 900004,
+      "nrProcesso": "0000000-04.2026.5.09.0000",
+      "status": "M",
+      "tipo": {
+        "id": 18,
+        "descricao": "Conciliação em Conhecimento por videoconferência"
+      },
+      "pautaAudienciaHorario": {
+        "horaInicial": "09:00:00",
+        "horaFinal": "09:10:00",
+        "id": 800005
+      },
+      "bloqueado": false,
+      "data": "2026-11-26"
+    },
+    {
+      "idProcesso": 900005,
+      "nrProcesso": "0000000-05.2026.5.09.0000",
+      "status": "M",
+      "tipo": {
+        "id": 18,
+        "descricao": "Conciliação em Conhecimento por videoconferência"
+      },
+      "pautaAudienciaHorario": {
+        "horaInicial": "09:10:00",
+        "horaFinal": "09:20:00",
+        "id": 800006
+      },
+      "bloqueado": false,
+      "data": "2026-11-26"
+    },
+    {
+      "idProcesso": 900006,
+      "nrProcesso": "0000000-06.2026.5.09.0000",
+      "status": "M",
+      "tipo": {
+        "id": 18,
+        "descricao": "Conciliação em Conhecimento por videoconferência"
+      },
+      "pautaAudienciaHorario": {
+        "horaInicial": "09:20:00",
+        "horaFinal": "09:30:00",
+        "id": 800007
+      },
+      "bloqueado": false,
+      "data": "2026-11-26"
+    },
+    {
+      "idProcesso": 900007,
+      "nrProcesso": "0000000-07.2026.5.09.0000",
+      "status": "M",
+      "tipo": {
+        "id": 18,
+        "descricao": "Conciliação em Conhecimento por videoconferência"
+      },
+      "pautaAudienciaHorario": {
+        "horaInicial": "09:30:00",
+        "horaFinal": "09:50:00",
+        "id": 800008
+      },
+      "bloqueado": false,
+      "data": "2026-11-26"
+    },
+    {
+      "idProcesso": 900008,
+      "nrProcesso": "0000000-08.2026.5.09.0000",
+      "status": "M",
+      "tipo": {
+        "id": 18,
+        "descricao": "Conciliação em Conhecimento por videoconferência"
+      },
+      "pautaAudienciaHorario": {
+        "horaInicial": "09:50:00",
+        "horaFinal": "10:00:00",
+        "id": 800009
+      },
+      "bloqueado": false,
+      "data": "2026-11-26"
+    },
+    {
+      "idProcesso": 900009,
+      "nrProcesso": "0000000-09.2026.5.09.0000",
+      "status": "M",
+      "tipo": {
+        "id": 18,
+        "descricao": "Conciliação em Conhecimento por videoconferência"
+      },
+      "pautaAudienciaHorario": {
+        "horaInicial": "10:00:00",
+        "horaFinal": "10:10:00",
+        "id": 800010
+      },
+      "bloqueado": false,
+      "data": "2026-11-26"
+    },
+    {
+      "tipo": {
+        "id": 18,
+        "descricao": "Conciliação em Conhecimento por videoconferência"
+      },
+      "pautaAudienciaHorario": {
+        "horaInicial": "10:10:00",
+        "horaFinal": "10:20:00"
+      },
+      "bloqueado": false,
+      "data": "2026-11-26"
+    },
+    {
+      "idProcesso": 900010,
+      "nrProcesso": "0000000-010.2026.5.09.0000",
+      "status": "M",
+      "tipo": {
+        "id": 18,
+        "descricao": "Conciliação em Conhecimento por videoconferência"
+      },
+      "pautaAudienciaHorario": {
+        "horaInicial": "10:20:00",
+        "horaFinal": "10:30:00",
+        "id": 800011
+      },
+      "bloqueado": false,
+      "data": "2026-11-26"
+    },
+    {
+      "idProcesso": 900011,
+      "nrProcesso": "0000000-011.2026.5.09.0000",
+      "status": "M",
+      "tipo": {
+        "id": 18,
+        "descricao": "Conciliação em Conhecimento por videoconferência"
+      },
+      "pautaAudienciaHorario": {
+        "horaInicial": "10:30:00",
+        "horaFinal": "10:40:00",
+        "id": 800012
+      },
+      "bloqueado": false,
+      "data": "2026-11-26"
+    },
+    {
+      "idProcesso": 900012,
+      "nrProcesso": "0000000-012.2026.5.09.0000",
+      "status": "M",
+      "tipo": {
+        "id": 18,
+        "descricao": "Conciliação em Conhecimento por videoconferência"
+      },
+      "pautaAudienciaHorario": {
+        "horaInicial": "10:40:00",
+        "horaFinal": "10:50:00",
+        "id": 800013
+      },
+      "bloqueado": false,
+      "data": "2026-11-26"
+    },
+    {
+      "idProcesso": 900013,
+      "nrProcesso": "0000000-013.2026.5.09.0000",
+      "status": "M",
+      "tipo": {
+        "id": 18,
+        "descricao": "Conciliação em Conhecimento por videoconferência"
+      },
+      "pautaAudienciaHorario": {
+        "horaInicial": "10:50:00",
+        "horaFinal": "11:00:00",
+        "id": 800014
+      },
+      "bloqueado": false,
+      "data": "2026-11-26"
+    }
+  ]
+}
