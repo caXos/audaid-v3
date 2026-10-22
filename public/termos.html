@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AudAid: termos de uso</title>
+  <link rel="stylesheet" href="paginas.css">
+</head>
+<body>
+<main>
+  <header class="topo">
+    <img src="icons/audaid.svg" alt="">
+    <div>
+      <h1>AudAid: termos de uso e privacidade</h1>
+      <p>Versão <span id="versao-termos">1</span> dos termos. Leia antes de usar.</p>
+    </div>
+  </header>
+
+  <section class="destaque">
+    <h2>A extensão age em seu nome</h2>
+    <p>
+      O AudAid faz requisições ao PJe <strong>usando a sua sessão</strong>: os cookies e o token de
+      segurança (XSRF) que o PJe já guardou no seu navegador quando você fez login. Para o PJe, é
+      como se você mesmo estivesse clicando nas telas.
+    </p>
+    <p>
+      Por isso, <strong>tudo o que o AudAid gravar fica registrado no seu nome</strong>: audiências
+      designadas ou redesignadas, atividades no GIGS e alterações do Juízo 100% Digital.
+    </p>
+  </section>
+
+  <section>
+    <h2>O que o AudAid faz</h2>
+    <p>
+      Ajuda assistentes de audiência a designar e redesignar audiências sem sair da tela do
+      processo, e a evitar erros, como escolher o tipo errado entre os 27 tipos de audiência.
+    </p>
+    <ul>
+      <li>Funciona <strong>só nas páginas do PJe dos TRTs</strong> (por exemplo,
+        <code>pje.trt9.jus.br</code>) e só no <strong>órgão julgador em que você está logado</strong>.</li>
+      <li>Audiências de outros órgãos aparecem apenas para consulta: o AudAid nunca as altera.</li>
+      <li>Datas em fim de semana, feriado ou suspensão de audiência são bloqueadas.</li>
+      <li>O AudAid <strong>ajuda</strong>, mas não substitui a sua conferência.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>O que o AudAid lê</h2>
+    <p>As mesmas informações que o PJe mostra quando você abre as telas dele:</p>
+    <ul>
+      <li>dados do processo (número, classe, fase, órgão julgador, Juízo 100% Digital);</li>
+      <li>audiências do processo, salas e pauta do dia da sala, tipos de audiência;</li>
+      <li>calendário de feriados e suspensões do órgão;</li>
+      <li>a identificação do órgão em que você está logado, lida do próprio token do PJe.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>O que o AudAid grava no PJe</h2>
+    <p>Somente quando você pede, e sempre mostrando antes o que vai fazer:</p>
+    <ul>
+      <li>designação ou redesignação de audiência;</li>
+      <li>atividade no GIGS (opcional);</li>
+      <li>retirada e recolocação do Juízo 100% Digital, apenas para designar audiência de Julgamento,
+        que o PJe não permite em processo 100% Digital.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Privacidade: para onde vão os dados</h2>
+    <ul>
+      <li><strong>O AudAid só conversa com o próprio PJe do seu tribunal.</strong></li>
+      <li><strong>Nenhum dado é enviado a qualquer outro servidor</strong>, nem ao autor da extensão. Não há
+        coleta de estatísticas, rastreamento ou publicidade.</li>
+      <li>Nunca são lidos ou guardados: sua senha, seu certificado digital ou dados das partes fora do
+        que a tela em uso precisa.</li>
+      <li>No seu navegador ficam guardados apenas as suas opções (posição do botão, sugestões de GIGS)
+        e a data em que você aceitou estes termos. Desinstalar a extensão apaga tudo.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Código aberto para leitura</h2>
+    <p>
+      O código do AudAid é público, para que qualquer pessoa possa conferir o que ele faz:
+      <a href="https://github.com/caXos/audaid-v3" target="_blank" rel="noopener">github.com/caXos/audaid-v3</a>.
+    </p>
+  </section>
+
+  <section>
+    <h2>Aceite</h2>
+    <p id="estado-aceite" class="suave">Você ainda não aceitou estes termos. Até aceitar, o AudAid fica inativo.</p>
+    <div class="linha">
+      <button id="aceitar" type="button">Li e concordo</button>
+    </div>
+  </section>
+
+  <footer>AudAid <span id="versao-extensao"></span> · © Jorge Henrique Bueno Gomez</footer>
+</main>
+<script src="termos.js"></script>
+</body>
+</html>

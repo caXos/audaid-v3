@@ -1,19 +1,29 @@
 // Build da extensão: um bundle IIFE por ponto de entrada (content scripts não podem ser módulos
 // ES no Chrome) e uma pasta pronta para carregar em cada navegador: dist/chrome e dist/firefox.
+//
+//   node scripts/build.mjs            → versão de desenvolvimento (modo simulação ligado por padrão)
+//   node scripts/build.mjs --release  → versão para as lojas (simulação desligada e escondida)
 
 import { build } from 'vite';
+import { Resvg } from '@resvg/resvg-js';
 import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { manifestChrome, manifestFirefox } from './manifest.mjs';
+import { manifestChrome, manifestFirefox, TAMANHOS_ICONE } from './manifest.mjs';
 
 const raiz = join(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = join(raiz, 'dist');
 const temp = join(dist, '.bundle');
+const release = process.argv.includes('--release');
 
 const pacote = JSON.parse(await readFile(join(raiz, 'package.json'), 'utf8'));
 
-const ENTRADAS = [{ entrada: 'src/content.ts', saida: 'content.js', nome: 'AudAidContent' }];
+const ENTRADAS = [
+  { entrada: 'src/content.ts', saida: 'content.js', nome: 'AudAidContent' },
+  { entrada: 'src/background.ts', saida: 'background.js', nome: 'AudAidBackground' },
+  { entrada: 'src/paginas/termos.ts', saida: 'termos.js', nome: 'AudAidTermos' },
+  { entrada: 'src/paginas/opcoes.ts', saida: 'opcoes.js', nome: 'AudAidOpcoes' },
+];
 
 await rm(dist, { recursive: true, force: true });
 
@@ -22,6 +32,10 @@ for (const { entrada, saida, nome } of ENTRADAS) {
     configFile: false,
     root: raiz,
     logLevel: 'warn',
+    define: {
+      __AUDAID_DEV__: JSON.stringify(!release),
+      __AUDAID_VERSAO__: JSON.stringify(pacote.version),
+    },
     build: {
       outDir: temp,
       emptyOutDir: false,
@@ -34,18 +48,28 @@ for (const { entrada, saida, nome } of ENTRADAS) {
   });
 }
 
+// O Chrome não aceita SVG nos ícones do manifest: gera PNGs a partir do mesmo SVG.
+const svg = await readFile(join(raiz, 'public', 'icons', 'audaid.svg'));
+const pngs = TAMANHOS_ICONE.map((tamanho) => ({
+  tamanho,
+  dados: new Resvg(svg, { fitTo: { mode: 'width', value: tamanho } }).render().asPng(),
+}));
+
 const navegadores = [
-  { pasta: 'chrome', manifest: manifestChrome(pacote.version) },
-  { pasta: 'firefox', manifest: manifestFirefox(pacote.version) },
+  { pasta: 'chrome', manifest: manifestChrome(pacote.version), comPng: true },
+  { pasta: 'firefox', manifest: manifestFirefox(pacote.version), comPng: false },
 ];
 
-for (const { pasta, manifest } of navegadores) {
+for (const { pasta, manifest, comPng } of navegadores) {
   const destino = join(dist, pasta);
-  await mkdir(destino, { recursive: true });
+  await mkdir(join(destino, 'icons'), { recursive: true });
   await cp(temp, destino, { recursive: true });
   await cp(join(raiz, 'public'), destino, { recursive: true });
+  if (comPng) {
+    for (const { tamanho, dados } of pngs) await writeFile(join(destino, 'icons', `audaid-${tamanho}.png`), dados);
+  }
   await writeFile(join(destino, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
 }
 
 await rm(temp, { recursive: true, force: true });
-console.log(`AudAid ${pacote.version}: dist/chrome e dist/firefox prontos.`);
+console.log(`AudAid ${pacote.version} (${release ? 'release' : 'desenvolvimento'}): dist/chrome e dist/firefox prontos.`);

@@ -18,14 +18,6 @@ export const CSS = `
   font: 13px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   color: var(--cor-texto);
 }
-.botao-abrir {
-  position: fixed; top: 6px; left: 50%; transform: translateX(-50%);
-  z-index: 2147483646;
-  font: 600 12px/1 system-ui, sans-serif; letter-spacing: .02em;
-  background: var(--cor-marca); color: #fff; border: 0; border-radius: 999px;
-  padding: 7px 14px; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.25);
-}
-.botao-abrir:hover { filter: brightness(1.1); }
 .painel {
   position: fixed; top: 0; right: 0; height: 100vh; width: min(540px, 100vw);
   z-index: 2147483647; background: var(--cor-fundo);

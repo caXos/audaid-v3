@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AudAid: opções</title>
+  <link rel="stylesheet" href="paginas.css">
+</head>
+<body>
+<main>
+  <header class="topo">
+    <img src="icons/audaid.svg" alt="">
+    <div>
+      <h1>AudAid: opções</h1>
+      <p>As alterações são salvas automaticamente e valem na hora, também nas abas abertas do PJe.</p>
+    </div>
+  </header>
+
+  <section>
+    <h2>Botão do AudAid</h2>
+    <div class="linha">
+      <label for="posicao">Posição na tela</label>
+      <select id="posicao"></select>
+    </div>
+    <div class="linha">
+      <label for="cor-icone">Cor do ícone</label>
+      <input id="cor-icone" type="color">
+      <label for="tamanho" style="min-width:auto">Tamanho (px)</label>
+      <input id="tamanho" type="number" step="1">
+    </div>
+    <div class="linha">
+      <label><input id="fundo-ativo" type="checkbox"> Com fundo</label>
+      <input id="fundo-cor" type="color" title="Cor do fundo">
+    </div>
+    <div class="linha">
+      <label><input id="borda-ativo" type="checkbox"> Com borda</label>
+      <input id="borda-cor" type="color" title="Cor da borda">
+      <label for="borda-espessura" style="min-width:auto">Espessura (px)</label>
+      <input id="borda-espessura" type="number" step="1">
+    </div>
+    <div class="previa" id="previa" aria-label="Prévia do botão"></div>
+    <p class="suave pequeno">A faixa escura da prévia imita o topo do PJe.</p>
+  </section>
+
+  <section>
+    <h2>Sugestões de GIGS</h2>
+    <p class="suave pequeno">
+      Aparecem na lista de GIGS do Controle Individual e do Lote. Escolher uma sugestão preenche o texto e
+      o prazo, que você ainda pode editar. O prazo é em dias úteis; <strong>0</strong> cria uma atividade sem prazo.
+      O tipo de atividade é sempre <strong>Prazo</strong>.
+    </p>
+    <table>
+      <thead><tr><th>Texto</th><th style="width:110px">Prazo (dias úteis)</th><th style="width:90px"></th></tr></thead>
+      <tbody id="gigs"></tbody>
+    </table>
+    <div class="linha"><button id="gigs-adicionar" class="secundario" type="button">Adicionar sugestão</button></div>
+    <p class="suave pequeno" id="gigs-variaveis"></p>
+  </section>
+
+  <section>
+    <h2>Termos de uso</h2>
+    <p id="estado-termos" class="suave"></p>
+    <div class="linha"><button id="ler-termos" class="secundario" type="button">Ler os termos</button></div>
+  </section>
+
+  <section>
+    <details id="diagnostico">
+      <summary>Diagnóstico</summary>
+      <p class="suave pequeno" id="diagnostico-nota"></p>
+      <div class="linha">
+        <label><input id="simulacao" type="checkbox"> <strong>Modo simulação</strong></label>
+      </div>
+      <p class="suave pequeno">
+        Com o modo simulação ligado, o AudAid monta e mostra cada requisição que gravaria no PJe
+        (designar, redesignar, GIGS, 100% Digital), mas <strong>não envia nenhuma</strong>. As leituras continuam.
+      </p>
+      <div class="linha">
+        <button id="revogar" class="perigo" type="button">Revogar o aceite dos termos</button>
+        <button id="restaurar" class="secundario" type="button">Restaurar opções padrão</button>
+      </div>
+    </details>
+  </section>
+
+  <p class="salvo" id="salvo" aria-live="polite"></p>
+  <footer>AudAid <span id="versao-extensao"></span> · © Jorge Henrique Bueno Gomez</footer>
+</main>
+<script src="opcoes.js"></script>
+</body>
+</html>

@@ -91,10 +91,13 @@ function navegador(): string {
   return `${nome} ${m[1]}`;
 }
 
+/**
+ * Painel da prova técnica. Até a entrega 3 (Controle Individual), é o que o FAB abre: serve de
+ * diagnóstico das leituras.
+ */
 export class ProvaTecnica {
   private readonly host: HTMLElement;
   private readonly raiz: HTMLElement;
-  private readonly botao: HTMLButtonElement;
   private painel: HTMLElement | null = null;
   private idProcesso: number | null = null;
   /** Incrementa a cada nova execução, para descartar resultados de uma execução antiga. */
@@ -102,10 +105,9 @@ export class ProvaTecnica {
 
   constructor(private readonly ambiente: Ambiente) {
     this.host = h('div');
-    this.host.id = 'audaid-v3';
+    this.host.id = 'audaid-v3-painel';
     const sombra = this.host.attachShadow({ mode: 'open' });
     sombra.append(h('style', {}, CSS));
-    this.botao = h('button', { class: 'botao-abrir', type: 'button', onclick: () => this.abrir() }, 'AudAid · prova técnica');
     this.raiz = h('div', { class: 'raiz' });
     sombra.append(this.raiz);
     this.garantirNaPagina();
@@ -120,13 +122,18 @@ export class ProvaTecnica {
     if (id === this.idProcesso) return;
     this.idProcesso = id;
     this.fechar();
-    this.raiz.replaceChildren(...(id === null ? [] : [this.botao]));
   }
 
-  private fechar() {
+  fechar() {
     this.geracao++;
     this.painel?.remove();
     this.painel = null;
+  }
+
+  /** Abre o painel; se já estiver aberto, fecha (o FAB funciona como alternância). */
+  alternar() {
+    if (this.painel) this.fechar();
+    else this.abrir();
   }
 
   private abrir() {

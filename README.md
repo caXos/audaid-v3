@@ -17,9 +17,17 @@ Extensão para **Firefox, Chrome e Edge** que ajuda assistentes de audiência do
 
 ## Estado
 
-Em desenvolvimento: **versão 3.0, entrega 1 (prova técnica, somente leitura)**. Nesta etapa a
-extensão **não grava nada no PJe**. Numa página de processo, ela mostra um painel que lê dados do
-processo, as audiências, os tipos de audiência, as salas, o calendário do órgão e a pauta do dia.
+Em desenvolvimento: **versão 3.0, entrega 2 (base)**. A extensão **ainda não grava nada no PJe**.
+
+- **Termos de uso:** abrem na instalação. Até o aceite, a extensão fica inativa.
+- **Botão do AudAid** nas telas de processo, com posição e estilo configuráveis. Por enquanto, ele
+  abre o painel de diagnóstico (a prova técnica, que só lê).
+- **Opções** (clique no ícone do AudAid na barra do navegador): botão, sugestões de GIGS, termos e
+  diagnóstico (modo simulação).
+- Aviso quando a versão antiga (v1) também está instalada.
+
+`npm run build` gera a versão de desenvolvimento, com o modo simulação ligado por padrão.
+`npm run build:release` gera a versão das lojas.
 
 ## Compilar
 
@@ -55,8 +63,11 @@ PJe.
 |---|---|
 | `src/pje/` | acesso ao PJe: ambiente e tribunal, sessão (cookies, JWT), requisições, endpoints |
 | `src/regras/` | regras puras e testadas: calendário (bloqueio de datas), pauta do dia, tipos de audiência |
-| `src/prova/` | painel da prova técnica (entrega 1) |
-| `src/ui/` | utilidades de interface (sem frameworks; tudo em Shadow DOM) |
+| `src/prova/` | painel da prova técnica (diagnóstico de leitura) |
+| `src/config/` | opções, termos e posição do botão (puro e testado) |
+| `src/ext/` | API de extensão: armazenamento e mensagens |
+| `src/paginas/` | páginas de termos e de opções |
+| `src/ui/` | botão flutuante, ícone e utilidades de interface (sem frameworks; Shadow DOM) |
 | `scripts/` | build e geração dos manifests de cada navegador |
 | `tests/` | testes (Vitest); as fixtures não têm dados pessoais |
 
