@@ -124,6 +124,10 @@ export class ProvaTecnica {
     this.fechar();
   }
 
+  get aberto() {
+    return this.painel !== null;
+  }
+
   fechar() {
     this.geracao++;
     this.painel?.remove();

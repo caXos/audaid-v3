@@ -66,7 +66,18 @@ export interface OpcoesGet {
   via?: Via;
 }
 
-export async function pjeGet<T>(url: string, opcoes: OpcoesGet = {}): Promise<Resposta<T>> {
+export type Metodo = 'GET' | 'POST' | 'PUT' | 'PATCH';
+
+export function pjeGet<T>(url: string, opcoes: OpcoesGet = {}): Promise<Resposta<T>> {
+  return pjeRequisicao<T>('GET', url, undefined, opcoes);
+}
+
+/** POST/PUT/PATCH com corpo JSON. Quem decide se pode escrever é o executor (src/fluxo). */
+export function pjeEnviar<T>(metodo: Exclude<Metodo, 'GET'>, url: string, corpo: unknown, opcoes: OpcoesGet = {}): Promise<Resposta<T>> {
+  return pjeRequisicao<T>(metodo, url, corpo, opcoes);
+}
+
+async function pjeRequisicao<T>(metodo: Metodo, url: string, corpo: unknown, opcoes: OpcoesGet): Promise<Resposta<T>> {
   const via = opcoes.via ?? viasDisponiveis()[0] ?? 'fetch';
   const funcao: FuncaoFetch | undefined =
     via === 'content.fetch' ? fetchDaPagina() : (u, i) => globalThis.fetch(u, i);
@@ -79,12 +90,18 @@ export async function pjeGet<T>(url: string, opcoes: OpcoesGet = {}): Promise<Re
 
   const headers: Record<string, string> = { Accept: 'application/json, text/plain, */*' };
   if (opcoes.xsrfToken) headers['X-XSRF-TOKEN'] = opcoes.xsrfToken;
+  const init: RequestInit = { method: metodo, credentials: 'include', headers };
+  if (metodo !== 'GET') {
+    headers['Content-Type'] = 'application/json';
+    init.body = JSON.stringify(corpo);
+  }
 
   try {
-    const resp = await funcao(url, { method: 'GET', credentials: 'include', headers });
+    const resp = await funcao(url, init);
     const texto = await resp.text();
     const ms = tempo();
     if (!resp.ok) return { ok: false, status: resp.status, ms, via, erro: interpretarErro(resp.status, texto) };
+    if (!texto.trim()) return { ok: true, status: resp.status, ms, via, dados: null as T };
     try {
       return { ok: true, status: resp.status, ms, via, dados: JSON.parse(texto) as T };
     } catch {

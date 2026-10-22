@@ -164,15 +164,74 @@ campo('gigs-adicionar').addEventListener('click', () => {
 
 campo('ler-termos').addEventListener('click', () => void ext.tabs.create({ url: ext.runtime.getURL('termos.html') }));
 
-campo('revogar').addEventListener('click', () => {
-  if (confirm('Revogar o aceite? O AudAid fica inativo até você aceitar os termos de novo.')) void salvarAceite(null);
+// ── Diálogo de confirmação ────────────────────────────────────────────────────────────────
+
+interface PedidoConfirmacao {
+  titulo: string;
+  itens: (string | Node)[];
+  botaoPerigo: string;
+}
+
+const dialogo = campo<HTMLDialogElement>('confirmacao');
+
+/** Pergunta com um `<dialog>` nativo. Cancelar tem o foco; Esc também cancela. */
+function confirmar({ titulo, itens, botaoPerigo }: PedidoConfirmacao): Promise<boolean> {
+  campo('confirmacao-titulo').textContent = titulo;
+  campo('confirmacao-itens').replaceChildren(...itens.map((i) => h('li', {}, i)));
+  campo('confirmacao-ok').textContent = botaoPerigo;
+  return new Promise((resolver) => {
+    const fechar = (resposta: boolean) => {
+      dialogo.removeEventListener('close', aoFechar);
+      if (dialogo.open) dialogo.close();
+      resolver(resposta);
+    };
+    const aoFechar = () => fechar(false);
+    dialogo.addEventListener('close', aoFechar);
+    campo('confirmacao-cancelar').onclick = () => fechar(false);
+    campo('confirmacao-ok').onclick = () => fechar(true);
+    dialogo.showModal();
+    campo('confirmacao-cancelar').focus();
+  });
+}
+
+const negrito = (texto: string) => h('strong', {}, texto);
+
+campo('revogar').addEventListener('click', async () => {
+  const ok = await confirmar({
+    titulo: 'Revogar o aceite dos termos?',
+    itens: [
+      h('span', {}, 'O AudAid fica ', negrito('inativo'), ' em todas as abas do PJe até você aceitar os termos de novo.'),
+      'Suas opções (botão e sugestões de GIGS) não são apagadas.',
+    ],
+    botaoPerigo: 'Revogar aceite',
+  });
+  if (ok) await salvarAceite(null);
 });
 
-campo('restaurar').addEventListener('click', () => {
-  if (!confirm('Restaurar todas as opções para o padrão? As sugestões de GIGS editadas serão perdidas.')) return;
+campo('restaurar').addEventListener('click', async () => {
   const padrao = opcoesPadrao(DEV);
+  const qtd = sugestoes.filter((s) => s.texto.trim()).length;
+  const ok = await confirmar({
+    titulo: 'Restaurar as opções padrão?',
+    itens: [
+      h('span', {}, negrito('Botão do AudAid:'), ' posição, cor do ícone, tamanho, fundo e borda voltam ao padrão (desenho preto sobre círculo branco, no topo ao centro).'),
+      h(
+        'span',
+        {},
+        negrito('Sugestões de GIGS:'),
+        ` voltam às ${padrao.gigs.sugestoes.length} de fábrica. `,
+        negrito(`As que você criou ou editou serão apagadas`),
+        ` (hoje você tem ${qtd} sugest${qtd === 1 ? 'ão' : 'ões'}).`,
+      ),
+      h('span', {}, negrito('Modo simulação:'), ` volta ao padrão desta versão (${padrao.simulacao ? 'ligado' : 'desligado'}).`),
+      'O aceite dos termos não muda.',
+    ],
+    botaoPerigo: 'Restaurar padrão',
+  });
+  if (!ok) return;
   preencher(padrao);
-  void salvarOpcoes(padrao).then(() => (salvo.textContent = 'Opções padrão restauradas.'));
+  await salvarOpcoes(padrao);
+  salvo.textContent = 'Opções padrão restauradas.';
 });
 
 // ── Carga e sincronização ─────────────────────────────────────────────────────────────────
