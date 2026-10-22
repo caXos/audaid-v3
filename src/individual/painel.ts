@@ -255,14 +255,16 @@ class Formulario {
   private readonly btnEncaixar = h('button', { class: 'acao secundaria', type: 'button' }, 'Encaixar no próximo minuto livre');
   private readonly msgHora = h('div', { class: 'msg' });
   // A pauta do dia abre por cima, num diálogo: nada no formulário muda de tamanho (§5).
-  private readonly btnPauta = h('button', { class: 'acao secundaria', type: 'button', disabled: true }, 'Ver pauta do dia');
+  // Caminho principal: escolher o horário clicando numa vaga da pauta (digitar é a alternativa).
+  private readonly btnPauta = h('button', { class: 'acao secundaria', type: 'button', disabled: true }, 'Escolher horário na pauta do dia');
   private readonly tituloPauta = h('h3');
+  private readonly dicaPauta = h('p', { class: 'suave' });
   private readonly corpoPauta = h('div', { class: 'corpo-pauta' });
   private readonly dialogoPauta = h(
     'dialog',
     { class: 'dialogo-pauta' },
     this.tituloPauta,
-    h('p', { class: 'suave' }, 'Clique numa vaga para usar o horário dela.'),
+    this.dicaPauta,
     this.corpoPauta,
     h('div', { class: 'rodape-dialogo' }, h('button', { class: 'acao', type: 'button', onclick: () => this.dialogoPauta.close() }, 'Fechar')),
   );
@@ -382,7 +384,9 @@ class Formulario {
           ...linha('Data', this.inData),
           vazio(),
           this.msgData,
-          ...linha('Horário', this.inHora, this.btnEncaixar, this.btnPauta),
+          ...linha('Horário', this.btnPauta),
+          vazio(),
+          h('div', { class: 'controles' }, this.inHora, h('span', { class: 'suave' }, 'ou digite'), this.btnEncaixar),
           vazio(),
           this.msgHora,
           ...linha('Tipo base', this.selBase),
@@ -486,7 +490,7 @@ class Formulario {
       this.definirMsg(this.msgHora, 'carregando', 'Consultando a pauta do dia…');
       pendencias.push('Aguarde a consulta da pauta.');
     } else if (!hora) {
-      this.definirMsg(this.msgHora, 'suave', `${resumoPauta(entradas)} Escolha o horário.`);
+      this.definirMsg(this.msgHora, 'suave', `${resumoPauta(entradas)} Escolha o horário na pauta ou digite.`);
     } else if (ocupante) {
       this.definirMsg(this.msgHora, 'erro', `${hora} já está ocupado pelo processo ${ocupante.nrProcesso ?? ocupante.idProcesso}: o PJe recusaria (PJE-064).`);
       pendencias.push('O horário está ocupado.');
@@ -608,12 +612,17 @@ class Formulario {
     this.tituloPauta.textContent = sala && data ? `Pauta do dia · ${nomeSala(sala)} · ${dataBr(data)}` : 'Pauta do dia';
     const entradas = sala && data ? this.pauta.entradas : undefined;
     const centralizado = (texto: string) => h('div', { class: 'centralizado' }, texto);
+    this.dicaPauta.textContent = !entradas?.length
+      ? ''
+      : entradas.some((e) => e.tipo === 'vaga')
+        ? 'Clique numa vaga para usar o horário dela.'
+        : 'Esta sala não tem vaga configurada neste dia: feche e digite o horário (o AudAid confere se está livre).';
     if (!entradas) {
       this.corpoPauta.replaceChildren(centralizado(this.pauta.erro ?? 'Consultando a pauta do dia…'));
       return;
     }
     if (!entradas.length) {
-      this.corpoPauta.replaceChildren(centralizado('Nenhuma audiência nem vaga nesta sala neste dia.'));
+      this.corpoPauta.replaceChildren(centralizado('Nenhuma audiência nem vaga nesta sala neste dia. Feche e digite o horário.'));
       return;
     }
     this.corpoPauta.replaceChildren(
