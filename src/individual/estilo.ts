@@ -12,20 +12,51 @@ export const CSS = `${CSS_BASE}
 .grade { display: grid; grid-template-columns: 110px 1fr; gap: 6px 10px; align-items: center; }
 .grade > label { color: var(--cor-suave); font-size: 12px; }
 .grade .controles { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
-.msg { min-height: 1.45em; font-size: 12px; grid-column: 2; }
+/* §5, layout estável: toda linha de mensagem tem altura FIXA de duas linhas; o excedente vai
+   para o tooltip. Assim nada abaixo se mexe quando o texto muda. */
+.msg, .aviso-digital, .previa-gigs {
+  height: 2.9em; line-height: 1.45em; overflow: hidden; font-size: 12px;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+}
+.msg { grid-column: 2; }
+.msg.carregando { color: var(--cor-suave); }
+.msg.carregando::before {
+  content: ''; display: inline-block; width: 10px; height: 10px; margin-right: 6px; vertical-align: -1px;
+  border: 2px solid #c3cad4; border-top-color: var(--cor-marca); border-radius: 50%;
+  animation: girar .8s linear infinite;
+}
+@keyframes girar { to { transform: rotate(360deg); } }
 .msg.bloqueia, .msg.erro { color: var(--cor-erro); }
 .msg.avisa { color: var(--cor-aviso); }
 .msg.ok { color: var(--cor-ok); }
 .msg.suave { color: var(--cor-suave); }
-.resultado-tipo { grid-column: 1 / -1; background: var(--cor-fundo-2); border-radius: 6px; padding: 6px 8px; min-height: 2.2em; }
+.resultado-tipo {
+  grid-column: 1 / -1; background: var(--cor-fundo-2); border-radius: 6px; padding: 6px 8px;
+  height: calc(2.9em + 12px); line-height: 1.45em; overflow: hidden;
+}
 .resultado-tipo.erro { background: var(--cor-erro-fundo); color: var(--cor-erro); }
-.aviso-digital { grid-column: 1 / -1; min-height: 1.45em; font-size: 12px; color: var(--cor-aviso); }
-.pauta-mini { max-height: 132px; overflow: auto; border: 1px solid #eef1f4; border-radius: 6px; margin-top: 4px; }
+.aviso-digital { grid-column: 1 / -1; color: var(--cor-aviso); }
+/* Diálogo da pauta do dia: abre por cima do painel. */
+.dialogo-pauta {
+  width: min(520px, calc(100vw - 32px)); border: 1px solid var(--cor-borda); border-radius: 10px;
+  padding: 14px 16px; color: var(--cor-texto); background: var(--cor-fundo);
+  font: 13px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  box-shadow: 0 12px 40px rgba(0,0,0,.25);
+}
+.dialogo-pauta::backdrop { background: rgba(20, 28, 38, .45); }
+.dialogo-pauta h3 { margin: 0 0 2px; font-size: 14px; }
+.dialogo-pauta p { margin: 0 0 8px; font-size: 12px; }
+.corpo-pauta { height: 340px; overflow: auto; border: 1px solid #eef1f4; border-radius: 6px; }
+.corpo-pauta .centralizado { height: 100%; display: flex; align-items: center; justify-content: center; text-align: center; color: var(--cor-suave); padding: 0 16px; }
+tr.clicavel { cursor: pointer; }
+tr.clicavel:hover td { background: #e6f4f5; }
+.rodape-dialogo { display: flex; justify-content: flex-end; margin-top: 10px; }
 input[type="text"].largo { width: 100%; }
 input[type="number"] { width: 70px; }
-.previa-gigs { grid-column: 1 / -1; font-size: 12px; color: var(--cor-suave); min-height: 1.45em; }
+.previa-gigs { grid-column: 1 / -1; color: var(--cor-suave); }
 .rodape-form { display: flex; gap: 10px; align-items: flex-start; margin-top: 10px; }
-.pendencias { margin: 0; padding-left: 18px; font-size: 12px; color: var(--cor-aviso); }
+/* Altura fixa também: a lista de pendências não empurra o cartão de resultado. */
+.pendencias { margin: 0; padding-left: 18px; font-size: 12px; color: var(--cor-aviso); height: 7.4em; overflow: auto; flex: 1; }
 .pendencias:empty::before { content: 'Tudo pronto.'; color: var(--cor-ok); margin-left: -18px; }
 button.acao:disabled { opacity: .45; cursor: not-allowed; }
 /* D42: campo que não se aplica fica visivelmente desabilitado. */

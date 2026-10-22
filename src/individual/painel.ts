@@ -24,7 +24,7 @@ import { somarUmMinuto } from '../pje/escrita';
 import { pjeGet, type Resposta } from '../pje/http';
 import { lerSessao } from '../pje/sessao';
 import { classificarData, hoje } from '../regras/calendario';
-import { pendenciaGigs, resolverVariaveis } from '../regras/gigs';
+import { dataBr, pendenciaGigs, resolverVariaveis } from '../regras/gigs';
 import { lerPauta, ocupanteDoMinuto, type EntradaPauta } from '../regras/pauta';
 import {
   aplicabilidade,
@@ -72,6 +72,12 @@ const TEXTO_ACAO: Record<AcaoSugerida, string> = {
 };
 
 const nomeSala = (s: Sala) => s.nome ?? s.descricao ?? String(s.id);
+
+function resumoPauta(entradas: EntradaPauta[]): string {
+  if (!entradas.length) return 'Pauta do dia vazia nesta sala.';
+  const vagas = entradas.filter((e) => e.tipo === 'vaga').length;
+  return `Pauta do dia: ${entradas.length - vagas} audiência(s), ${vagas} vaga(s).`;
+}
 
 export class ControleIndividual {
   private readonly host = h('div');
@@ -248,7 +254,18 @@ class Formulario {
   private readonly inHora = h('input', { type: 'time' });
   private readonly btnEncaixar = h('button', { class: 'acao secundaria', type: 'button' }, 'Encaixar no próximo minuto livre');
   private readonly msgHora = h('div', { class: 'msg' });
-  private readonly pautaMini = h('div', { class: 'pauta-mini' });
+  // A pauta do dia abre por cima, num diálogo: nada no formulário muda de tamanho (§5).
+  private readonly btnPauta = h('button', { class: 'acao secundaria', type: 'button', disabled: true }, 'Ver pauta do dia');
+  private readonly tituloPauta = h('h3');
+  private readonly corpoPauta = h('div', { class: 'corpo-pauta' });
+  private readonly dialogoPauta = h(
+    'dialog',
+    { class: 'dialogo-pauta' },
+    this.tituloPauta,
+    h('p', { class: 'suave' }, 'Clique numa vaga para usar o horário dela.'),
+    this.corpoPauta,
+    h('div', { class: 'rodape-dialogo' }, h('button', { class: 'acao', type: 'button', onclick: () => this.dialogoPauta.close() }, 'Fechar')),
+  );
 
   private readonly selBase = h('select');
   private readonly chkVideo = h('input', { type: 'checkbox' });
@@ -339,6 +356,11 @@ class Formulario {
       if (v === 'outro') this.inGigsTexto.focus();
     });
     this.btnEncaixar.onclick = () => this.encaixar();
+    this.btnPauta.onclick = () => {
+      this.desenharPauta(this.horaValida());
+      if (typeof this.dialogoPauta.showModal === 'function') this.dialogoPauta.showModal();
+      else this.dialogoPauta.setAttribute('open', '');
+    };
     this.btnEnviar.onclick = () => void this.enviar();
     this.btnCopiar.onclick = () => void this.copiar();
   }
@@ -360,11 +382,9 @@ class Formulario {
           ...linha('Data', this.inData),
           vazio(),
           this.msgData,
-          ...linha('Horário', this.inHora, this.btnEncaixar),
+          ...linha('Horário', this.inHora, this.btnEncaixar, this.btnPauta),
           vazio(),
           this.msgHora,
-          vazio(),
-          this.pautaMini,
           ...linha('Tipo base', this.selBase),
           ...linha('Variações', this.rotuloVideo, this.selSemana),
           ...linha('Fase', this.selFase, this.txtFase),
@@ -378,6 +398,7 @@ class Formulario {
         ),
         h('div', { class: 'rodape-form' }, this.btnEnviar, this.listaPendencias),
       ),
+      this.dialogoPauta,
     );
   }
 
@@ -449,27 +470,32 @@ class Formulario {
       }
     }
 
-    // Pauta e horário (D28, D33)
+    // Pauta e horário (D28, D33). Tudo numa linha de altura fixa; a lista fica no diálogo.
     if (sala && data) this.agendarPauta(sala.id, data);
-    const ocupante = this.pauta.entradas && hora ? ocupanteDoMinuto(this.pauta.entradas, hora, this.d.processo.id) : undefined;
+    const entradas = sala && data ? this.pauta.entradas : undefined;
+    const ocupante = entradas && hora ? ocupanteDoMinuto(entradas, hora, this.d.processo.id) : undefined;
     this.btnEncaixar.disabled = !ocupante;
-    if (!hora) {
-      this.definirMsg(this.msgHora, 'suave', '');
-      pendencias.push('Escolha o horário.');
-    } else if (!sala || !data) {
-      this.definirMsg(this.msgHora, 'suave', 'Escolha sala e data para conferir a pauta.');
-    } else if (this.pauta.carregando || !this.pauta.entradas) {
-      this.definirMsg(this.msgHora, this.pauta.erro ? 'erro' : 'suave', this.pauta.erro ?? 'Consultando a pauta do dia…');
-      pendencias.push(this.pauta.erro ? 'Não foi possível conferir a pauta.' : 'Aguarde a consulta da pauta.');
+    this.btnPauta.disabled = !entradas;
+    if (!hora) pendencias.push('Escolha o horário.');
+    if (!sala || !data) {
+      this.definirMsg(this.msgHora, 'suave', 'Escolha sala e data: a pauta do dia é consultada na hora.');
+    } else if (this.pauta.erro) {
+      this.definirMsg(this.msgHora, 'erro', this.pauta.erro);
+      pendencias.push('Não foi possível conferir a pauta.');
+    } else if (!entradas) {
+      this.definirMsg(this.msgHora, 'carregando', 'Consultando a pauta do dia…');
+      pendencias.push('Aguarde a consulta da pauta.');
+    } else if (!hora) {
+      this.definirMsg(this.msgHora, 'suave', `${resumoPauta(entradas)} Escolha o horário.`);
     } else if (ocupante) {
       this.definirMsg(this.msgHora, 'erro', `${hora} já está ocupado pelo processo ${ocupante.nrProcesso ?? ocupante.idProcesso}: o PJe recusaria (PJE-064).`);
       pendencias.push('O horário está ocupado.');
-    } else if (this.pauta.entradas.some((e) => e.tipo === 'vaga' && e.hora === hora)) {
+    } else if (entradas.some((e) => e.tipo === 'vaga' && e.hora === hora)) {
       this.definirMsg(this.msgHora, 'ok', `${hora}: vaga configurada na sala, pode usar.`);
     } else {
-      this.definirMsg(this.msgHora, 'ok', `${hora} está livre na sala.`);
+      this.definirMsg(this.msgHora, 'ok', `${hora} está livre na sala. ${resumoPauta(entradas)}`);
     }
-    this.desenharPautaMini(hora);
+    this.desenharPauta(hora);
 
     // Tipo (D6)
     const e = this.escolhaTipo();
@@ -540,6 +566,8 @@ class Formulario {
   private definirMsg(el: HTMLElement, classe: string, texto: string) {
     el.className = `msg ${classe}`;
     el.textContent = texto;
+    // A linha tem altura fixa (§5); se o texto não couber, o completo fica no tooltip.
+    el.title = texto;
   }
 
   private textoGigsResolvido(): string | null {
@@ -573,29 +601,43 @@ class Formulario {
     }, 300);
   }
 
-  private desenharPautaMini(hora: string | null) {
-    const entradas = this.pauta.entradas;
+  /** Conteúdo do diálogo da pauta. Texto sozinho fica centralizado (área de tamanho fixo). */
+  private desenharPauta(hora: string | null) {
+    const sala = this.salaAtual();
+    const data = this.dataValida();
+    this.tituloPauta.textContent = sala && data ? `Pauta do dia · ${nomeSala(sala)} · ${dataBr(data)}` : 'Pauta do dia';
+    const entradas = sala && data ? this.pauta.entradas : undefined;
+    const centralizado = (texto: string) => h('div', { class: 'centralizado' }, texto);
     if (!entradas) {
-      this.pautaMini.replaceChildren(h('div', { class: 'suave', title: '' }, ' '));
+      this.corpoPauta.replaceChildren(centralizado(this.pauta.erro ?? 'Consultando a pauta do dia…'));
       return;
     }
     if (!entradas.length) {
-      this.pautaMini.replaceChildren(h('div', { class: 'suave' }, ' Nenhuma audiência nem vaga nesta sala neste dia.'));
+      this.corpoPauta.replaceChildren(centralizado('Nenhuma audiência nem vaga nesta sala neste dia.'));
       return;
     }
-    this.pautaMini.replaceChildren(
+    this.corpoPauta.replaceChildren(
       h(
         'table',
         {},
-        ...entradas.map((e) =>
-          h(
+        ...entradas.map((e) => {
+          const linha = h(
             'tr',
-            { class: e.tipo === 'vaga' ? 'vaga' : e.hora === hora ? 'destaque' : '' },
+            { class: [e.tipo === 'vaga' ? 'vaga clicavel' : '', e.hora === hora ? 'destaque' : ''].join(' ').trim() },
             h('td', { class: 'hora' }, e.hora),
             h('td', {}, e.tipo === 'vaga' ? 'vaga' : e.idProcesso === this.d.processo.id ? `${e.nrProcesso ?? ''} (este processo)` : (e.nrProcesso ?? String(e.idProcesso))),
             h('td', { class: 'suave' }, e.descricaoTipo ?? ''),
-          ),
-        ),
+          );
+          if (e.tipo === 'vaga') {
+            linha.title = `Usar ${e.hora}`;
+            linha.onclick = () => {
+              this.inHora.value = e.hora;
+              this.dialogoPauta.close();
+              this.atualizar();
+            };
+          }
+          return linha;
+        }),
       ),
     );
   }

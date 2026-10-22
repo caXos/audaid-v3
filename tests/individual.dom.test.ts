@@ -132,6 +132,30 @@ describe('Controle Individual (entrega 3, simulação)', () => {
     expect(p.inp('checkbox').disabled).toBe(false);
   });
 
+  it('pauta: indicador de consulta, botão "Ver pauta do dia" e clique numa vaga preenche o horário', async () => {
+    const p = abrir();
+    await vi.waitFor(() => expect(p.texto()).toContain('Redesignar audiência'));
+    const verPauta = p.botao(/Ver pauta do dia/);
+    expect(verPauta.disabled).toBe(true);
+    expect(p.texto()).toContain('Escolha sala e data: a pauta do dia é consultada na hora.');
+
+    p.mudar(p.inp('date'), '2026-10-27');
+    // Logo ao escolher a data, antes da resposta: indicador de consulta.
+    expect(p.raiz.querySelector('.msg.carregando')?.textContent).toBe('Consultando a pauta do dia…');
+    await vi.waitFor(() => expect(p.texto()).toContain('Pauta do dia: 1 audiência(s), 1 vaga(s). Escolha o horário.'), { timeout: 2000 });
+    expect(verPauta.disabled).toBe(false);
+
+    verPauta.click();
+    const dialogo = p.raiz.querySelector('dialog.dialogo-pauta')!;
+    expect(dialogo.hasAttribute('open')).toBe(true);
+    expect(dialogo.textContent).toContain('Pauta do dia · Sala 01 · 27/10/2026');
+    const vaga = dialogo.querySelector<HTMLTableRowElement>('tr.clicavel')!;
+    expect(vaga.textContent).toContain('10:30');
+    vaga.click();
+    expect(p.inp('time').value).toBe('10:30');
+    expect(p.texto()).toContain('10:30: vaga configurada na sala, pode usar.');
+  });
+
   it('dia sem audiência nem vaga ({dia} sem pautasDoDia) libera o horário', async () => {
     const p = abrir();
     await vi.waitFor(() => expect(p.texto()).toContain('Redesignar audiência'));
