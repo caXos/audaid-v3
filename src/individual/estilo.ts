@@ -5,6 +5,14 @@ export const CSS = `${CSS_BASE}
 .painel { width: min(580px, 100vw); }
 .cabecalho .linha-cab { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
 .link { background: none; border: 0; padding: 0; color: var(--cor-marca); cursor: pointer; font: inherit; text-decoration: underline; }
+.faixa-real {
+  background: #fff1e0; color: #8a4500; font-weight: 700; font-size: 12px;
+  text-align: center; padding: 6px 10px; border-bottom: 2px solid #f0a14a; letter-spacing: .02em;
+}
+.confirmacao { border: 2px solid #f0a14a; background: #fffaf3; border-radius: 8px; padding: 10px 12px; }
+.confirmacao ul { margin: 6px 0 8px; }
+button.acao.perigo { background: #b3261e; border-color: #b3261e; }
+.recarregar { border: 1px solid #bfe3c9; background: var(--cor-ok-fundo); border-radius: 8px; padding: 8px 10px; margin: 6px 0 4px; }
 .faixa-simulacao {
   background: var(--cor-erro-fundo); color: var(--cor-erro); font-weight: 700; font-size: 12px;
   text-align: center; padding: 6px 10px; border-bottom: 1px solid #f1c4bf; letter-spacing: .02em;

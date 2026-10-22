@@ -144,9 +144,11 @@ export class ControleIndividual {
         ? h(
             'div',
             { class: 'faixa-simulacao' },
-            ESCRITA_LIBERADA ? 'SIMULAÇÃO: nada será gravado no PJe' : 'SIMULAÇÃO: nada será gravado no PJe (envio real liberado só na entrega 4)',
+            ESCRITA_LIBERADA
+              ? 'SIMULAÇÃO: nada será gravado no PJe. Para gravar de verdade, desligue o modo simulação nas Opções.'
+              : 'SIMULAÇÃO: nada será gravado no PJe (envio real bloqueado nesta versão).',
           )
-        : null,
+        : h('div', { class: 'faixa-real' }, 'ENVIO REAL: o que você confirmar será gravado no PJe em seu nome.'),
       corpo,
     );
     this.raiz.append(this.painel);
@@ -292,6 +294,7 @@ class Formulario {
   private pauta: { chave: string; carregando: boolean; entradas?: EntradaPauta[]; erro?: string } = { chave: '', carregando: false };
   private temporizadorPauta: ReturnType<typeof setTimeout> | undefined;
   private executando = false;
+  private confirmando = false;
   private ultimoResultado: ResultadoExecucao | null = null;
 
   constructor(
@@ -386,7 +389,9 @@ class Formulario {
           this.msgData,
           ...linha('Horário', this.btnPauta),
           vazio(),
-          h('div', { class: 'controles' }, this.inHora, h('span', { class: 'suave' }, 'ou digite'), this.btnEncaixar),
+          h('div', { class: 'controles' }, h('span', { class: 'suave' }, 'ou digite:'), this.inHora),
+          vazio(),
+          h('div', { class: 'controles' }, this.btnEncaixar),
           vazio(),
           this.msgHora,
           ...linha('Tipo base', this.selBase),
@@ -563,7 +568,7 @@ class Formulario {
     // Botão
     const verbo = this.d.antiga ? 'redesignação' : 'designação';
     this.btnEnviar.textContent = this.executando ? 'Executando…' : this.simulando ? `Simular ${verbo}` : this.d.antiga ? 'Redesignar' : 'Designar';
-    this.btnEnviar.disabled = this.executando || pendencias.length > 0;
+    this.btnEnviar.disabled = this.executando || this.confirmando || pendencias.length > 0;
     this.listaPendencias.replaceChildren(...pendencias.map((p) => h('li', {}, p)));
   }
 
@@ -704,6 +709,10 @@ class Formulario {
       hoje: hoje(),
     };
 
+    // Envio real: mostra antes o que será gravado e só segue com a confirmação explícita.
+    if (!this.simulando && !(await this.confirmarEnvio(pedido, tr.tipo.descricao, nomeSala(sala)))) return;
+    if (!this.vivo()) return;
+
     this.executando = true;
     this.btnCopiar.disabled = true;
     this.atualizar();
@@ -753,12 +762,67 @@ class Formulario {
     );
   }
 
+  /** Resumo do que será gravado no PJe, com "Confirmar e gravar" / "Cancelar". */
+  private confirmarEnvio(p: PedidoDesignacao, descricaoTipo: string, sala: string): Promise<boolean> {
+    const quando = `${dataBr(p.data)} às ${p.hora}`;
+    const itens: string[] = [
+      p.antiga
+        ? `Redesignar a audiência de ${formatarDataHora(p.antiga.dataInicio)} (${p.antiga.descricaoTipo}) para ${quando}.`
+        : `Designar audiência em ${quando}.`,
+      `Tipo: ${descricaoTipo} · ${sala}.`,
+    ];
+    if (p.juizoDigital && p.ehJulgamento) {
+      itens.push('Retirar o Juízo 100% Digital antes e recolocá-lo depois (o PJe lança dois movimentos no processo).');
+    }
+    if (p.gigs) {
+      itens.push(`Lançar GIGS "${p.gigs.texto}" ${p.gigs.prazo > 0 ? `com prazo de ${p.gigs.prazo} dia(s) útil(eis)` : 'sem prazo'}.`);
+    }
+    const aviso = classificarData(p.data, this.d.eventos);
+    if (aviso.nivel === 'avisa') itens.push(`Atenção: ${aviso.avisos.join('; ')}.`);
+
+    this.confirmando = true;
+    this.atualizar();
+    return new Promise((resolver) => {
+      const terminar = (ok: boolean) => {
+        this.confirmando = false;
+        if (!ok) {
+          this.areaResultado.className = 'cartao-corpo suave';
+          this.areaResultado.replaceChildren('Cancelado. Nada foi gravado.');
+        }
+        this.atualizar();
+        resolver(ok);
+      };
+      const gravar = h('button', { class: 'acao perigo', type: 'button', onclick: () => terminar(true) }, 'Confirmar e gravar no PJe');
+      this.areaResultado.className = 'cartao-corpo';
+      this.areaResultado.replaceChildren(
+        h(
+          'div',
+          { class: 'confirmacao' },
+          h('strong', {}, 'Confira o que será gravado no PJe em seu nome:'),
+          h('ul', {}, ...itens.map((i) => h('li', {}, i))),
+          h('div', { class: 'linha-form' }, gravar, h('button', { class: 'acao secundaria', type: 'button', onclick: () => terminar(false) }, 'Cancelar')),
+        ),
+      );
+      gravar.focus();
+    });
+  }
+
   private desenharResultado(r: ResultadoExecucao) {
+    const gravouDeVerdade = !this.simulando && (r.desfecho === 'sucesso' || r.desfecho === 'parcial');
     const cabecalho = h(
       'div',
       {},
       h('div', { class: `resumo ${r.desfecho}` }, r.resumo),
       r.acoes.length ? h('ul', { class: 'aviso-texto' }, ...r.acoes.map((a) => h('li', {}, TEXTO_ACAO[a]))) : null,
+      // §2.2, passo 6: a tela do PJe só mostra a audiência nova depois de recarregar.
+      gravouDeVerdade
+        ? h(
+            'div',
+            { class: 'recarregar' },
+            'Recarregar a página para ver a audiência no PJe?',
+            h('div', { class: 'linha-form' }, h('button', { class: 'acao', type: 'button', onclick: () => location.reload() }, 'Recarregar agora'), h('button', { class: 'acao secundaria', type: 'button', onclick: (ev) => (ev.target as HTMLElement).closest('.recarregar')?.remove() }, 'Agora não')),
+          )
+        : null,
     );
     this.desenharPassos(r.passos, cabecalho);
   }
@@ -767,7 +831,7 @@ class Formulario {
   private async copiar() {
     const r = this.ultimoResultado;
     if (!r) return;
-    const linhas = [`AudAid 3.0 · entrega 3 · ${this.simulando ? 'SIMULAÇÃO' : 'REAL'} · ${new Date().toLocaleString('pt-BR')}`, `Resultado: ${r.desfecho} · ${r.resumo}`, ''];
+    const linhas = [`AudAid 3.0 · ${this.simulando ? 'SIMULAÇÃO' : 'REAL'} · ${new Date().toLocaleString('pt-BR')}`, `Resultado: ${r.desfecho} · ${r.resumo}`, ''];
     for (const p of r.passos) {
       linhas.push(`# ${p.titulo} [${ROTULO_ESTADO[p.estado]}]${p.detalhe ? ` ${p.detalhe}` : ''}${p.erro ? ` ERRO: ${p.erro.mensagem} (${p.erro.codigoErro ?? '—'})` : ''}`);
       if (p.requisicao) {

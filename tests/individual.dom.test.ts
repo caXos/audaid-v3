@@ -31,6 +31,11 @@ function responder(url: string, init?: RequestInit): Response {
   const metodo = init?.method ?? 'GET';
   if (metodo !== 'GET') {
     escritas.push({ metodo, url });
+    // Designar/redesignar devolvem a audiência nova, como o PJe real.
+    if (/pautasaudiencias\/audiencias/.test(url)) {
+      const corpo = JSON.parse(String(init?.body ?? '{}')) as { horarioInicial?: string };
+      return new Response(JSON.stringify({ id: 555, status: 'Designada', dataInicio: `2026-10-27T${corpo.horarioInicial}:00` }), { status: 200 });
+    }
     return new Response('{}', { status: 200 });
   }
   const json = (d: unknown) => new Response(JSON.stringify(d), { status: 200 });
@@ -77,10 +82,10 @@ beforeEach(() => {
 
 afterEach(() => vi.unstubAllGlobals());
 
-function abrir() {
+function abrir(simulacao = true) {
   const c = new ControleIndividual(ambiente, () => {});
   c.definirProcesso(100);
-  c.alternar(opcoesPadrao(true));
+  c.alternar({ ...opcoesPadrao(true), simulacao });
   const raiz = document.getElementById('audaid-v3-individual')!.shadowRoot!;
   const sel = () => [...raiz.querySelectorAll('select')];
   const inp = (tipo: string) => raiz.querySelector<HTMLInputElement>(`input[type="${tipo}"]`)!;
@@ -228,5 +233,49 @@ describe('Controle Individual (entrega 3, simulação)', () => {
     p.botao(/Simular/).click();
     expect(p.texto()).toContain('Você trocou de órgão logado');
     expect(escritas).toEqual([]);
+  });
+});
+
+describe('Controle Individual (entrega 4, envio real)', () => {
+  async function prontoParaGravar(gigs?: string) {
+    processoDigital = false;
+    const p = abrir(false);
+    await vi.waitFor(() => expect(p.texto()).toContain('Redesignar audiência'));
+    p.mudar(p.inp('date'), '2026-10-27');
+    p.mudar(p.inp('time'), '10:12');
+    if (gigs) p.mudar(p.sel()[4]!, gigs);
+    await vi.waitFor(() => expect(p.botao(/^Redesignar$/).disabled).toBe(false), { timeout: 2000 });
+    return p;
+  }
+
+  it('faixa de envio real e botão sem "Simular"', async () => {
+    const p = await prontoParaGravar();
+    expect(p.texto()).toContain('ENVIO REAL: o que você confirmar será gravado no PJe em seu nome.');
+    expect(p.texto()).not.toContain('SIMULAÇÃO:');
+  });
+
+  it('pede confirmação antes de gravar; Cancelar não grava nada', async () => {
+    const p = await prontoParaGravar();
+    p.botao(/^Redesignar$/).click();
+    expect(p.texto()).toContain('Confira o que será gravado no PJe em seu nome:');
+    expect(p.texto()).toContain('Redesignar a audiência de 20/10/2026 10:10 (Conciliação em Conhecimento por videoconferência) para 27/10/2026 às 10:12.');
+    expect(p.botao(/^Redesignar$/).disabled).toBe(true);
+    p.botao(/^Cancelar$/).click();
+    expect(p.texto()).toContain('Cancelado. Nada foi gravado.');
+    expect(escritas).toEqual([]);
+  });
+
+  it('confirmado: grava na ordem certa e oferece recarregar a página', async () => {
+    const p = await prontoParaGravar('s1'); // GIGS "Analisar", 2 dias úteis
+    p.botao(/^Redesignar$/).click();
+    expect(p.texto()).toContain('Lançar GIGS "Analisar" com prazo de 2 dia(s) útil(eis).');
+    p.botao(/Confirmar e gravar no PJe/).click();
+    await vi.waitFor(() => expect(p.texto()).toContain('Audiência redesignada com sucesso.'), { timeout: 2000 });
+    expect(escritas.map((e) => `${e.metodo} ${new URL(e.url).pathname}`)).toEqual([
+      'PUT /pje-comum-api/api/pautasaudiencias/audiencias/redesignacao',
+      'POST /pje-gigs-api/api/atividade',
+    ]);
+    expect(p.texto()).toContain('Recarregar a página para ver a audiência no PJe?');
+    expect(p.botao(/Recarregar agora/)).toBeTruthy();
   });
 });

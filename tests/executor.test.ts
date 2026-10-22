@@ -66,6 +66,9 @@ function roteiroPadrao(sobrescrever: Partial<Record<string, Roteiro>> = {}): Rot
     if (r.caminho.includes('/redesignacao')) return (sobrescrever['redesignar'] ?? (() => ok(audiencia(555, '2026-10-27T10:11:00'))))(r);
     if (r.caminho.endsWith('/pautasaudiencias/audiencias')) return (sobrescrever['designar'] ?? (() => ok(audiencia(555, '2026-10-27T10:11:00'))))(r);
     if (r.caminho.includes('alteracaoParcial')) return (sobrescrever['digital'] ?? (() => ok(null)))(r);
+    if (r.metodo === 'GET' && /\/processos\/id\/\d+$/.test(r.caminho)) {
+      return (sobrescrever['processo'] ?? (() => ok({ id: 100, numero: '0000100-00.2026.5.09.0000', juizoDigital: true, valorDaCausa: 1 })))(r);
+    }
     if (r.caminho.includes('/audiencias?status=M')) return (sobrescrever['lista'] ?? (() => ok([])))(r);
     if (r.caminho.includes('retorna-prazo')) return (sobrescrever['prazo'] ?? (() => ok({ DATA: '2026-10-26T00:00:00' })))(r);
     if (r.caminho.endsWith('/pje-gigs-api/api/atividade')) return (sobrescrever['gigs'] ?? (() => ok({ id: 1 })))(r);
@@ -101,9 +104,45 @@ describe('executor: caminho feliz', () => {
     const t = falso(roteiroPadrao());
     const r = await executarDesignacao(pedido({ juizoDigital: true, ehJulgamento: true }), t);
     expect(r.desfecho).toBe('sucesso');
-    expect(t.recebidas.map((x) => (x.corpo as { juizoDigital?: boolean } | undefined)?.juizoDigital)).toEqual([undefined, false, undefined, true]);
-    expect(ordem(t)[1]).toBe('PUT /pje-comum-api/api/processos/100');
-    expect(ordem(t)[3]).toBe('PUT /pje-comum-api/api/processos/100');
+    expect(ordem(t)).toEqual([
+      'GET /pje-comum-api/api/pautasaudiencias/classificacoes/dia',
+      'GET /pje-comum-api/api/processos/id/100', // releitura antes de retirar
+      'PUT /pje-comum-api/api/processos/100',
+      'POST /pje-comum-api/api/pautasaudiencias/audiencias',
+      'GET /pje-comum-api/api/processos/id/100', // releitura antes de recolocar
+      'PUT /pje-comum-api/api/processos/100',
+    ]);
+    const puts = t.recebidas.filter((x) => x.caminho.includes('alteracaoParcial'));
+    expect(puts.map((x) => (x.corpo as { juizoDigital: boolean }).juizoDigital)).toEqual([false, true]);
+  });
+
+  it('o 100% Digital usa o processo relido na hora, não o lido ao abrir o painel', async () => {
+    let leitura = 0;
+    const t = falso(roteiroPadrao({ processo: () => ok({ id: 100, juizoDigital: ++leitura === 1, valorDaCausa: 1000 + leitura }) }));
+    await executarDesignacao(pedido({ juizoDigital: true, ehJulgamento: true, processoBruto: { id: 100, valorDaCausa: 1 } }), t);
+    const puts = t.recebidas.filter((x) => x.caminho.includes('alteracaoParcial')).map((x) => x.corpo);
+    expect(puts).toEqual([
+      { id: 100, juizoDigital: false, valorDaCausa: 1001 },
+      { id: 100, juizoDigital: true, valorDaCausa: 1002 },
+    ]);
+  });
+
+  it('se não der para reler o processo antes de retirar, nada é alterado', async () => {
+    const t = falso(roteiroPadrao({ processo: () => erro(500) }));
+    const r = await executarDesignacao(pedido({ juizoDigital: true, ehJulgamento: true }), t);
+    expect(r.desfecho).toBe('falha');
+    expect(r.resumo).toMatch(/Nada foi alterado/);
+    expect(t.recebidas.every((x) => x.metodo === 'GET')).toBe(true);
+  });
+
+  it('se não der para reler antes de recolocar, recoloca com a leitura anterior e avisa', async () => {
+    let leitura = 0;
+    const t = falso(roteiroPadrao({ processo: () => (++leitura === 1 ? ok({ id: 100, juizoDigital: true, valorDaCausa: 7 }) : erro(503)) }));
+    const r = await executarDesignacao(pedido({ juizoDigital: true, ehJulgamento: true }), t);
+    expect(r.desfecho).toBe('sucesso');
+    const ultimoPut = t.recebidas.filter((x) => x.caminho.includes('alteracaoParcial')).at(-1);
+    expect(ultimoPut?.corpo).toEqual({ id: 100, juizoDigital: true, valorDaCausa: 7 });
+    expect(r.passos.find((p) => p.titulo === 'Recolocar o Juízo 100% Digital')?.estado).toBe('aviso');
   });
 
   it('100% Digital sem Julgamento não é alterado', async () => {
@@ -203,11 +242,11 @@ describe('executor: falha na designação (D32b, D26, D9b)', () => {
   });
 });
 
-describe('simulação e trava (entrega 3)', () => {
+describe('simulação e envio real (entrega 4)', () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it('a trava está fechada nesta entrega', () => {
-    expect(ESCRITA_LIBERADA).toBe(false);
+  it('a trava foi liberada na entrega 4: quem decide é o modo simulação', () => {
+    expect(ESCRITA_LIBERADA).toBe(true);
   });
 
   it('simulação: leituras de verdade, escritas não saem, e o resultado mostra tudo', async () => {
@@ -217,14 +256,41 @@ describe('simulação e trava (entrega 3)', () => {
     expect(r.passos.map((p) => p.estado)).toEqual(['ok', 'ok', 'simulado', 'simulado', 'simulado', 'ok', 'simulado']);
   });
 
-  it('transportePje com simulação DESLIGADA ainda não escreve (trava)', async () => {
+  it('transportePje com simulação LIGADA não escreve', async () => {
     const fetch = vi.fn(async () => new Response('{}', { status: 200 }));
     vi.stubGlobal('fetch', fetch);
-    const t = transportePje('https://pje.trt9.jus.br', () => 'XSRF', false);
+    const t = transportePje('https://pje.trt9.jus.br', () => 'XSRF', true);
     expect(t.simulando).toBe(true);
     const r = await t.enviar({ metodo: 'POST', caminho: '/pje-comum-api/api/pautasaudiencias/audiencias', corpo: {} });
     expect(r).toEqual({ ok: true, status: 0, dados: null, simulado: true });
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('transportePje com simulação DESLIGADA grava: JSON, Content-Type e XSRF lido na hora', async () => {
+    const fetch = vi.fn(async (_url: string, _init?: RequestInit) => new Response('{"id":555}', { status: 200 }));
+    vi.stubGlobal('fetch', fetch);
+    let xsrf = 'A';
+    const t = transportePje('https://pje.trt9.jus.br', () => xsrf, false);
+    expect(t.simulando).toBe(false);
+    xsrf = 'B';
+    const r = await t.enviar({ metodo: 'PUT', caminho: '/pje-comum-api/api/pautasaudiencias/audiencias/redesignacao', corpo: { a: 1 } });
+    expect(r).toEqual({ ok: true, status: 200, dados: { id: 555 } });
+    const [url, init] = fetch.mock.calls[0]!;
+    expect(url).toBe('https://pje.trt9.jus.br/pje-comum-api/api/pautasaudiencias/audiencias/redesignacao');
+    expect(init?.method).toBe('PUT');
+    expect(init?.body).toBe('{"a":1}');
+    expect(init?.credentials).toBe('include');
+    const headers = init?.headers as Record<string, string>;
+    expect(headers['Content-Type']).toBe('application/json');
+    expect(headers['X-XSRF-TOKEN']).toBe('B');
+  });
+
+  it('erro do PJe no envio real vira ErroPje (PJE-064)', async () => {
+    const corpo = JSON.stringify({ identificadorRequisicao: 'abc', codigoErro: 'PJE-064', mensagem: 'Já existe uma audiência marcada para o horário solicitado.' });
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(corpo, { status: 400 })));
+    const t = transportePje('https://pje.trt9.jus.br', () => 'X', false);
+    const r = await t.enviar({ metodo: 'POST', caminho: '/pje-comum-api/api/pautasaudiencias/audiencias', corpo: {} });
+    expect(r).toEqual({ ok: false, status: 400, erro: { mensagem: 'Já existe uma audiência marcada para o horário solicitado.', codigoErro: 'PJE-064', identificadorRequisicao: 'abc' } });
   });
 
   it('transportePje faz as leituras de verdade, com o XSRF lido na hora', async () => {

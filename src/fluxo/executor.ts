@@ -18,10 +18,11 @@ import { classificarData } from '../regras/calendario';
 import { lerPauta, ocupanteDoMinuto } from '../regras/pauta';
 
 /**
- * Trava da entrega 3: enquanto for `false`, NENHUMA requisição de escrita sai, mesmo com o modo
- * simulação desligado. A entrega 4 libera, depois da conferência dos payloads.
+ * Trava da escrita. Ficou `false` na entrega 3 (só simulação); liberada na entrega 4, em
+ * 22/10/2026, depois da conferência dos payloads contra as capturas reais. Com ela `true`, quem
+ * decide entre simular e gravar é o modo simulação das Opções.
  */
-export const ESCRITA_LIBERADA = false;
+export const ESCRITA_LIBERADA = true;
 
 export interface Requisicao {
   metodo: 'GET' | 'POST' | 'PUT';
@@ -74,7 +75,10 @@ export interface AudienciaAntiga {
 export interface PedidoDesignacao {
   idProcesso: number;
   idOrgaoLogado: number;
-  /** O objeto do GET do processo, inteiro: é o corpo do PUT do 100% Digital (D31d). */
+  /**
+   * O objeto do GET do processo lido ao abrir o painel. O PUT do 100% Digital usa uma leitura
+   * NOVA, feita na hora; este só serve de reserva se a releitura antes de recolocar falhar.
+   */
   processoBruto: Record<string, unknown>;
   juizoDigital: boolean;
   /** Audiência do órgão logado que será substituída (redesignação, D32). */
@@ -114,6 +118,8 @@ export interface ResultadoExecucao {
 }
 
 // ── Execução ──────────────────────────────────────────────────────────────────────────────
+
+const ehObjeto = (v: unknown): v is Record<string, unknown> => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
 
 const comecaEm = (a: { dataInicio?: string }, data: string, hora: string) =>
   typeof a.dataInicio === 'string' && a.dataInicio.startsWith(`${data}T${hora}`);
@@ -163,9 +169,25 @@ export async function executarDesignacao(
   registrar({ titulo: 'Conferir a pauta do dia', estado: 'ok', requisicao: reqPauta, detalhe: `${p.hora} está livre na sala.` });
 
   // 2. Retirar o 100% Digital (D26): só para Julgamento em processo 100% Digital.
+  // O corpo é o processo INTEIRO: relido agora, para não regravar dado que alguém mudou depois
+  // que o painel abriu (é o que a tela "Retificar" faz: carrega e salva na hora).
+  const reqProcesso: Requisicao = { metodo: 'GET', caminho: caminhos.processo(p.idProcesso) };
   const precisaAlternar = p.juizoDigital && p.ehJulgamento;
+  let processoAtual = p.processoBruto;
   if (precisaAlternar) {
-    const req: Requisicao = { metodo: 'PUT', caminho: caminhosEscrita.juizoDigital(p.idProcesso), corpo: payloadJuizoDigital(p.processoBruto, false) };
+    const rProc = await t.enviar(reqProcesso);
+    if (!rProc.ok || !ehObjeto(rProc.dados)) {
+      registrar({
+        titulo: 'Retirar o Juízo 100% Digital',
+        estado: 'erro',
+        requisicao: reqProcesso,
+        erro: rProc.ok ? { mensagem: 'Resposta inesperada ao reler o processo.' } : rProc.erro,
+        detalhe: 'Não foi possível reler o processo antes de alterá-lo.',
+      });
+      return falha('Não foi possível reler o processo. Nada foi alterado.');
+    }
+    processoAtual = rProc.dados;
+    const req: Requisicao = { metodo: 'PUT', caminho: caminhosEscrita.juizoDigital(p.idProcesso), corpo: payloadJuizoDigital(processoAtual, false) };
     const r = await t.enviar(req);
     if (!r.ok) {
       registrar({ titulo: 'Retirar o Juízo 100% Digital', estado: 'erro', requisicao: req, erro: r.erro });
@@ -213,13 +235,19 @@ export async function executarDesignacao(
   // 4. Recolocar o 100% Digital: SEMPRE, mesmo se o passo 3 falhou (D26).
   let pendencia = '';
   if (precisaAlternar) {
-    const req: Requisicao = { metodo: 'PUT', caminho: caminhosEscrita.juizoDigital(p.idProcesso), corpo: payloadJuizoDigital(p.processoBruto, true) };
+    // Relê de novo: a designação pode ter mudado o processo. Se a releitura falhar, recoloca assim
+    // mesmo com a leitura de antes da retirada, porque deixar sem o 100% Digital é pior.
+    const rProc = await t.enviar(reqProcesso);
+    const releu = rProc.ok && ehObjeto(rProc.dados);
+    const base = releu ? (rProc.dados as Record<string, unknown>) : processoAtual;
+    const req: Requisicao = { metodo: 'PUT', caminho: caminhosEscrita.juizoDigital(p.idProcesso), corpo: payloadJuizoDigital(base, true) };
     const r = await t.enviar(req);
+    const aviso = releu ? undefined : 'Não deu para reler o processo; foi usada a leitura de antes da retirada.';
     if (!r.ok) {
       pendencia = 'ATENÇÃO: o processo ficou SEM o Juízo 100% Digital. Recoloque pela tela Retificar do PJe.';
       registrar({ titulo: 'Recolocar o Juízo 100% Digital', estado: 'erro', requisicao: req, erro: r.erro, detalhe: pendencia });
     } else {
-      registrar({ titulo: 'Recolocar o Juízo 100% Digital', estado: estadoEscrita(r), requisicao: req });
+      registrar({ titulo: 'Recolocar o Juízo 100% Digital', estado: aviso ? 'aviso' : estadoEscrita(r), requisicao: req, detalhe: aviso });
     }
   }
 
