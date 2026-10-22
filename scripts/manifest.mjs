@@ -44,7 +44,7 @@ export function manifestChrome(versao) {
 }
 
 export function manifestFirefox(versao) {
-  const icones = { 48: 'icons/audaid.svg', 96: 'icons/audaid.svg' };
+  const icones = { 48: 'icons/audaid-barra.svg', 96: 'icons/audaid-barra.svg' };
   return {
     ...base(versao),
     icons: icones,

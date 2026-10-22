@@ -38,5 +38,7 @@ export function cssDoEstilo(estilo: EstiloFab): Record<string, string> {
     background: estilo.fundo.ativo ? estilo.fundo.cor : 'transparent',
     border: estilo.borda.ativo ? `${estilo.borda.espessura}px solid ${estilo.borda.cor}` : '0',
     'border-radius': temCaixa ? '50%' : '0',
+    // Sombra discreta: o círculo aparece tanto na barra escura quanto no fundo branco do PJe.
+    'box-shadow': temCaixa ? '0 1px 4px rgba(0, 0, 0, 0.35)' : 'none',
   };
 }

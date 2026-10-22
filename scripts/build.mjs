@@ -48,11 +48,23 @@ for (const { entrada, saida, nome } of ENTRADAS) {
   });
 }
 
-// O Chrome não aceita SVG nos ícones do manifest: gera PNGs a partir do mesmo SVG.
-const svg = await readFile(join(raiz, 'public', 'icons', 'audaid.svg'));
+// Ícone da barra e do menu de extensões: o desenho sobre um fundo branco arredondado (D41). Só o
+// desenho preto sumia no tema escuro do navegador. O Chrome não aceita SVG no manifest, então ele
+// recebe PNGs gerados a partir desse mesmo SVG.
+const svgOriginal = await readFile(join(raiz, 'public', 'icons', 'audaid.svg'), 'utf8');
+const partes = /<svg([^>]*)>([\s\S]*)<\/svg>/.exec(svgOriginal);
+if (!partes || !/viewBox=/.test(partes[1])) throw new Error('public/icons/audaid.svg em formato inesperado');
+// Os atributos da tag raiz (viewBox, fill-rule="evenodd"…) vão junto: o "✓" é um recorte que
+// depende do evenodd.
+const atributos = partes[1].replace(/\s+xmlns(:\w+)?="[^"]*"/g, '');
+const svgBarra =
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">` +
+  `<rect width="100" height="100" rx="22" fill="#ffffff"/>` +
+  `<svg x="12" y="12" width="76" height="76"${atributos}>${partes[2]}</svg>` +
+  `</svg>\n`;
 const pngs = TAMANHOS_ICONE.map((tamanho) => ({
   tamanho,
-  dados: new Resvg(svg, { fitTo: { mode: 'width', value: tamanho } }).render().asPng(),
+  dados: new Resvg(svgBarra, { fitTo: { mode: 'width', value: tamanho } }).render().asPng(),
 }));
 
 const navegadores = [
@@ -65,6 +77,7 @@ for (const { pasta, manifest, comPng } of navegadores) {
   await mkdir(join(destino, 'icons'), { recursive: true });
   await cp(temp, destino, { recursive: true });
   await cp(join(raiz, 'public'), destino, { recursive: true });
+  await writeFile(join(destino, 'icons', 'audaid-barra.svg'), svgBarra);
   if (comPng) {
     for (const { tamanho, dados } of pngs) await writeFile(join(destino, 'icons', `audaid-${tamanho}.png`), dados);
   }

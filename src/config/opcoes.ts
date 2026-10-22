@@ -60,11 +60,11 @@ export function opcoesPadrao(desenvolvimento: boolean): Opcoes {
   return {
     fab: {
       posicao: 'topo-centro',
-      // Padrão do blueprint: só o ícone, sem fundo e sem borda.
+      // Fundo branco e desenho preto (D41): só o ícone sumia na barra escura do PJe.
       estilo: {
         corIcone: '#1a1a1a',
         tamanho: 28,
-        fundo: { ativo: false, cor: '#ffffff' },
+        fundo: { ativo: true, cor: '#ffffff' },
         borda: { ativo: false, cor: '#00838f', espessura: 2 },
       },
     },
@@ -126,9 +126,9 @@ export function normalizarOpcoes(bruto: unknown, desenvolvimento: boolean): Opco
       estilo: {
         corIcone: cor(est['corIcone'], p.fab.estilo.corIcone),
         tamanho: inteiro(est['tamanho'], p.fab.estilo.tamanho, LIMITES.tamanho.min, LIMITES.tamanho.max),
-        fundo: { ativo: booleano(fundo['ativo'], false), cor: cor(fundo['cor'], p.fab.estilo.fundo.cor) },
+        fundo: { ativo: booleano(fundo['ativo'], p.fab.estilo.fundo.ativo), cor: cor(fundo['cor'], p.fab.estilo.fundo.cor) },
         borda: {
-          ativo: booleano(borda['ativo'], false),
+          ativo: booleano(borda['ativo'], p.fab.estilo.borda.ativo),
           cor: cor(borda['cor'], p.fab.estilo.borda.cor),
           espessura: inteiro(borda['espessura'], p.fab.estilo.borda.espessura, LIMITES.espessura.min, LIMITES.espessura.max),
         },

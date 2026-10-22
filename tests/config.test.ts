@@ -3,10 +3,11 @@ import { aceiteValido, normalizarOpcoes, novoAceite, opcoesPadrao, POSICOES_FAB,
 import { cssDaPosicao, cssDoEstilo } from '../src/config/posicao';
 
 describe('opções', () => {
-  it('padrão do blueprint: topo-centro, só o ícone, 4 sugestões de GIGS', () => {
+  it('padrão: topo-centro, desenho preto sobre fundo branco (D41), sem borda, 4 sugestões de GIGS', () => {
     const o = opcoesPadrao(false);
     expect(o.fab.posicao).toBe('topo-centro');
-    expect(o.fab.estilo.fundo.ativo).toBe(false);
+    expect(o.fab.estilo.corIcone).toBe('#1a1a1a');
+    expect(o.fab.estilo.fundo).toEqual({ ativo: true, cor: '#ffffff' });
     expect(o.fab.estilo.borda.ativo).toBe(false);
     expect(o.gigs.sugestoes.map((s) => s.texto)).toEqual([
       '@RJ1',
@@ -83,17 +84,31 @@ describe('posição e estilo do FAB (§2.6)', () => {
     }
   });
 
-  it('sem fundo e sem borda, o botão é só o ícone', () => {
-    const css = cssDoEstilo(opcoesPadrao(false).fab.estilo);
+  it('sem fundo e sem borda, o botão é só o ícone, sem sombra', () => {
+    const estilo = { ...opcoesPadrao(false).fab.estilo, fundo: { ativo: false, cor: '#ffffff' } };
+    const css = cssDoEstilo(estilo);
     expect(css['background']).toBe('transparent');
     expect(css['border']).toBe('0');
     expect(css['padding']).toBe('0');
+    expect(css['box-shadow']).toBe('none');
   });
 
-  it('com fundo ou borda, vira um círculo', () => {
+  it('o padrão é um círculo branco com sombra', () => {
+    const css = cssDoEstilo(opcoesPadrao(false).fab.estilo);
+    expect(css['background']).toBe('#ffffff');
+    expect(css['border-radius']).toBe('50%');
+    expect(css['box-shadow']).not.toBe('none');
+  });
+
+  it('com borda, vira um círculo com a borda escolhida', () => {
     const estilo = { ...opcoesPadrao(false).fab.estilo, borda: { ativo: true, cor: '#00838f', espessura: 3 } };
     const css = cssDoEstilo(estilo);
     expect(css['border']).toBe('3px solid #00838f');
     expect(css['border-radius']).toBe('50%');
+  });
+
+  it('opções antigas sem "fundo.ativo" salvo herdam o padrão novo', () => {
+    expect(normalizarOpcoes({ fab: { estilo: { corIcone: '#000000' } } }, false).fab.estilo.fundo.ativo).toBe(true);
+    expect(normalizarOpcoes({ fab: { estilo: { fundo: { ativo: false } } } }, false).fab.estilo.fundo.ativo).toBe(false);
   });
 });
