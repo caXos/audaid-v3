@@ -4,12 +4,12 @@ import {
   opcoesPadrao,
   POSICOES_FAB,
   ROTULO_POSICAO,
-  VARIAVEIS_GIGS,
   type Opcoes,
   type SugestaoGigs,
 } from '../config/opcoes';
 import { cssDaPosicao, cssDoEstilo } from '../config/posicao';
 import { aoMudarArmazenado, ext, lerArmazenado, salvarAceite, salvarOpcoes } from '../ext/api';
+import { VARIAVEIS_GIGS } from '../regras/gigs';
 import { h } from '../ui/dom';
 import { criarIcone } from '../ui/icone';
 
@@ -41,7 +41,10 @@ tamanho.max = String(LIMITES.tamanho.max);
 bordaEspessura.min = String(LIMITES.espessura.min);
 bordaEspessura.max = String(LIMITES.espessura.max);
 for (const p of POSICOES_FAB) posicao.append(h('option', { value: p }, ROTULO_POSICAO[p]));
-campo('gigs-variaveis').textContent = `Variáveis que você pode usar no texto, preenchidas com os dados da audiência designada: ${VARIAVEIS_GIGS.join(', ')}.`;
+campo('gigs-variaveis').replaceChildren(
+  'Variáveis que você pode usar no texto (o AudAid as preenche na hora de lançar o GIGS):',
+  h('ul', {}, ...VARIAVEIS_GIGS.map((v) => h('li', {}, h('code', {}, v.variavel), ` · ${v.descricao}`))),
+);
 campo('versao-extensao').textContent = __AUDAID_VERSAO__ + (DEV ? ' (desenvolvimento)' : '');
 campo('diagnostico-nota').textContent = DEV
   ? 'Versão de desenvolvimento: o modo simulação vem ligado por padrão.'

@@ -9,7 +9,7 @@ import {
   payloadRedesignar,
   somarUmMinuto,
 } from '../src/pje/escrita';
-import { dataHoraPorExtenso, pendenciaGigs, resolverVariaveis } from '../src/regras/gigs';
+import { ALFABETO_HASH, dataHoraPorExtenso, gerarHash, pendenciaGigs, resolverVariaveis, VARIAVEIS_GIGS } from '../src/regras/gigs';
 import {
   aplicabilidade,
   descricaoTipo,
@@ -161,6 +161,36 @@ describe('GIGS: variáveis e validação (D29b)', () => {
       'Conciliação em Conhecimento por videoconferência em 20/10/2026 10:11 · Sala 01 Cejusc-CSC · 20/10/2026',
     );
     expect(resolverVariaveis('@RJ1', aud)).toBe('@RJ1');
+  });
+
+  it('variáveis novas da D43: {acao}, {usuario} = {eu}, {orgao}, {hash}', () => {
+    const d = { ...aud, acao: 'redesignada' as const, usuario: 'FULANO DE TAL', orgao: 'CEJUSC - JT - CASCAVEL', hash: 'AUD-7K3Q9F2M' };
+    expect(resolverVariaveis('Audiência {acao} por {eu} ({usuario}) no {orgao} · {hash}', d)).toBe(
+      'Audiência redesignada por FULANO DE TAL (FULANO DE TAL) no CEJUSC - JT - CASCAVEL · AUD-7K3Q9F2M',
+    );
+    expect(resolverVariaveis('{Usuário} {ÓRGÃO} {ação}', d)).toBe('FULANO DE TAL CEJUSC - JT - CASCAVEL redesignada');
+  });
+
+  it('variável desconhecida ou sem dado fica intacta, sem bloquear (D43)', () => {
+    expect(resolverVariaveis('{dia} e {xyz}', aud)).toBe('{dia} e {xyz}');
+    expect(resolverVariaveis('{eu} em {data e hora}', { usuario: 'FULANO' })).toBe('FULANO em {data e hora}');
+  });
+
+  it('a lista do diálogo tem as 9 variáveis, com descrição', () => {
+    expect(VARIAVEIS_GIGS.map((v) => v.variavel)).toEqual(['{data}', '{hora}', '{data e hora}', '{tipo}', '{sala}', '{acao}', '{eu}', '{orgao}', '{hash}']);
+    expect(VARIAVEIS_GIGS.every((v) => v.descricao.length > 5)).toBe(true);
+  });
+
+  it('{hash}: AUD- + 8 caracteres do alfabeto sem ambíguos (D44)', () => {
+    const formato = /^AUD-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{8}$/;
+    for (let i = 0; i < 200; i++) expect(gerarHash()).toMatch(formato);
+    expect(ALFABETO_HASH).not.toMatch(/[01OIL]/);
+    // Fonte controlada: bytes 0..7 → os 8 primeiros símbolos.
+    expect(gerarHash(() => Uint8Array.from([0, 1, 2, 3, 4, 5, 6, 7, 0, 0, 0, 0, 0, 0, 0, 0]))).toBe('AUD-23456789');
+    // Bytes ≥ 248 são descartados (evita viés), e a geração continua até completar.
+    let chamada = 0;
+    const fonte = () => (chamada++ === 0 ? new Uint8Array(16).fill(255) : new Uint8Array(16).fill(31));
+    expect(gerarHash(fonte)).toBe('AUD-22222222');
   });
 
   it('valida texto e prazo só quando vai lançar', () => {

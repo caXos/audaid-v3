@@ -56,6 +56,8 @@ button.acao.perigo { background: #b3261e; border-color: #b3261e; }
 .dialogo-pauta p { margin: 0 0 8px; font-size: 12px; }
 .corpo-pauta { height: 340px; overflow: auto; border: 1px solid #eef1f4; border-radius: 6px; }
 .corpo-pauta .centralizado { height: 100%; display: flex; align-items: center; justify-content: center; text-align: center; color: var(--cor-suave); padding: 0 16px; }
+.corpo-variaveis { max-height: 360px; overflow: auto; border: 1px solid #eef1f4; border-radius: 6px; }
+.corpo-variaveis code { font: 12px ui-monospace, Consolas, monospace; background: var(--cor-fundo-2); padding: 1px 5px; border-radius: 4px; white-space: nowrap; }
 tr.clicavel { cursor: pointer; }
 tr.clicavel:hover td { background: #e6f4f5; }
 .rodape-dialogo { display: flex; justify-content: flex-end; margin-top: 10px; }

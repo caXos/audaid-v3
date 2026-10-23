@@ -41,6 +41,8 @@ export interface Sessao {
   accessTokenLegivel: boolean;
   /** Órgão em que o usuário está logado agora (D5). Ler sempre na hora da ação. */
   orgaoLogado?: OrgaoLogado;
+  /** Nome do usuário, como o PJe o guarda no token (variável `{usuario}`/`{eu}` do GIGS, D43). */
+  nomeUsuario?: string;
   expiraEm?: Date;
 }
 
@@ -59,5 +61,7 @@ export function lerSessao(cookieString: string): Sessao {
   }
   const exp = payload?.['exp'];
   if (typeof exp === 'number') sessao.expiraEm = new Date(exp * 1000);
+  const nome = payload?.['nome'];
+  if (typeof nome === 'string' && nome.trim()) sessao.nomeUsuario = nome.trim();
   return sessao;
 }

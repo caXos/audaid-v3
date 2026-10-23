@@ -20,11 +20,10 @@ import {
   type Sala,
   type TipoAudiencia,
 } from '../pje/api';
-import { somarUmMinuto } from '../pje/escrita';
 import { pjeGet, type Resposta } from '../pje/http';
 import { lerSessao } from '../pje/sessao';
 import { classificarData, hoje } from '../regras/calendario';
-import { dataBr, pendenciaGigs, resolverVariaveis } from '../regras/gigs';
+import { dataBr, gerarHash, pendenciaGigs, resolverVariaveis, VARIAVEIS_GIGS, type DadosVariaveisGigs } from '../regras/gigs';
 import { lerPauta, ocupanteDoMinuto, type EntradaPauta } from '../regras/pauta';
 import {
   aplicabilidade,
@@ -54,6 +53,8 @@ interface Dados {
   eventos: EventoCalendario[];
   idOrgaoLogado: number;
   descricaoOrgaoLogado: string;
+  /** Nome do usuário (JWT), para `{usuario}`/`{eu}` no GIGS (D43). */
+  nomeUsuario?: string;
   /** Audiência do órgão logado que seria substituída (D32). */
   antiga?: Audiencia;
 }
@@ -66,7 +67,7 @@ const ROTULO_ESTADO: Record<RegistroPasso['estado'], string> = {
 };
 
 const TEXTO_ACAO: Record<AcaoSugerida, string> = {
-  'escolher-outro-horario': 'Escolha outro horário (o botão "Encaixar" acha o próximo minuto livre).',
+  'escolher-outro-horario': 'Escolha outro horário, na pauta do dia ou digitando.',
   'redesignar-antiga': 'Redesigne a audiência antiga pela pauta do PJe, com os dados mostrados acima.',
   'gigs-audiencia-perdida': 'Ou registre um GIGS com os dados da audiência antiga, para não esquecer.',
 };
@@ -206,6 +207,7 @@ export class ControleIndividual {
       eventos: rCal.dados,
       idOrgaoLogado: oj.id,
       descricaoOrgaoLogado: oj.descricao,
+      nomeUsuario: sessao.nomeUsuario,
       antiga,
     };
 
@@ -254,7 +256,6 @@ class Formulario {
   private readonly inData = h('input', { type: 'date' });
   private readonly msgData = h('div', { class: 'msg' });
   private readonly inHora = h('input', { type: 'time' });
-  private readonly btnEncaixar = h('button', { class: 'acao secundaria', type: 'button' }, 'Encaixar no próximo minuto livre');
   private readonly msgHora = h('div', { class: 'msg' });
   // A pauta do dia abre por cima, num diálogo: nada no formulário muda de tamanho (§5).
   // Caminho principal: escolher o horário clicando numa vaga da pauta (digitar é a alternativa).
@@ -283,6 +284,19 @@ class Formulario {
 
   private readonly selGigs = h('select');
   private readonly inGigsTexto = h('input', { type: 'text', class: 'largo' });
+  // D43: as variáveis ficam à vista num diálogo, e clicar insere no texto.
+  private readonly btnVariaveis = h('button', { class: 'acao secundaria', type: 'button' }, 'Exibir variáveis');
+  private readonly corpoVariaveis = h('div', { class: 'corpo-variaveis' });
+  private readonly dialogoVariaveis = h(
+    'dialog',
+    { class: 'dialogo-pauta' },
+    h('h3', {}, 'Variáveis do texto do GIGS'),
+    h('p', { class: 'suave' }, 'Clique numa variável para inseri-la no texto. Variável que o AudAid não conhece vai como está escrita.'),
+    this.corpoVariaveis,
+    h('div', { class: 'rodape-dialogo' }, h('button', { class: 'acao', type: 'button', onclick: () => this.dialogoVariaveis.close() }, 'Fechar')),
+  );
+  /** Código desta execução (D44); renovado depois de cada envio. */
+  private hash = gerarHash();
   private readonly inGigsPrazo = h('input', { type: 'number' });
   private readonly previaGigs = h('div', { class: 'previa-gigs' });
 
@@ -296,6 +310,8 @@ class Formulario {
   private executando = false;
   private confirmando = false;
   private ultimoResultado: ResultadoExecucao | null = null;
+  /** `{hash}` usado na última execução, se o texto do GIGS o tinha (D44). */
+  private hashDaExecucao: string | null = null;
 
   constructor(
     private readonly ambiente: Ambiente,
@@ -360,7 +376,11 @@ class Formulario {
       this.atualizar();
       if (v === 'outro') this.inGigsTexto.focus();
     });
-    this.btnEncaixar.onclick = () => this.encaixar();
+    this.btnVariaveis.onclick = () => {
+      this.desenharVariaveis();
+      if (typeof this.dialogoVariaveis.showModal === 'function') this.dialogoVariaveis.showModal();
+      else this.dialogoVariaveis.setAttribute('open', '');
+    };
     this.btnPauta.onclick = () => {
       this.desenharPauta(this.horaValida());
       if (typeof this.dialogoPauta.showModal === 'function') this.dialogoPauta.showModal();
@@ -391,8 +411,6 @@ class Formulario {
           vazio(),
           h('div', { class: 'controles' }, h('span', { class: 'suave' }, 'ou digite:'), this.inHora),
           vazio(),
-          h('div', { class: 'controles' }, this.btnEncaixar),
-          vazio(),
           this.msgHora,
           ...linha('Tipo base', this.selBase),
           ...linha('Variações', this.rotuloVideo, this.selSemana),
@@ -401,13 +419,14 @@ class Formulario {
           this.resultadoTipo,
           this.avisoDigital,
           ...linha('GIGS', this.selGigs),
-          ...linha('Texto', this.inGigsTexto),
+          ...linha('Texto', this.inGigsTexto, this.btnVariaveis),
           ...linha('Prazo', this.inGigsPrazo, h('span', { class: 'suave' }, 'dias úteis (0 = sem prazo)')),
           this.previaGigs,
         ),
         h('div', { class: 'rodape-form' }, this.btnEnviar, this.listaPendencias),
       ),
       this.dialogoPauta,
+      this.dialogoVariaveis,
     );
   }
 
@@ -483,7 +502,6 @@ class Formulario {
     if (sala && data) this.agendarPauta(sala.id, data);
     const entradas = sala && data ? this.pauta.entradas : undefined;
     const ocupante = entradas && hora ? ocupanteDoMinuto(entradas, hora, this.d.processo.id) : undefined;
-    this.btnEncaixar.disabled = !ocupante;
     this.btnPauta.disabled = !entradas;
     if (!hora) pendencias.push('Escolha o horário.');
     if (!sala || !data) {
@@ -497,7 +515,7 @@ class Formulario {
     } else if (!hora) {
       this.definirMsg(this.msgHora, 'suave', `${resumoPauta(entradas)} Escolha o horário na pauta ou digite.`);
     } else if (ocupante) {
-      this.definirMsg(this.msgHora, 'erro', `${hora} já está ocupado pelo processo ${ocupante.nrProcesso ?? ocupante.idProcesso}: o PJe recusaria (PJE-064).`);
+      this.definirMsg(this.msgHora, 'erro', `${hora} já está ocupado pelo processo ${ocupante.nrProcesso ?? ocupante.idProcesso}: o PJe recusaria (PJE-064). Escolha outro horário na pauta ou digite outro.`);
       pendencias.push('O horário está ocupado.');
     } else if (entradas.some((e) => e.tipo === 'vaga' && e.hora === hora)) {
       this.definirMsg(this.msgHora, 'ok', `${hora}: vaga configurada na sala, pode usar.`);
@@ -558,12 +576,14 @@ class Formulario {
     const lancar = this.selGigs.value !== '';
     this.inGigsTexto.disabled = !lancar;
     this.inGigsPrazo.disabled = !lancar;
+    this.btnVariaveis.disabled = !lancar;
     const gigs = { lancar, texto: this.inGigsTexto.value, prazo: Number(this.inGigsPrazo.value) };
     const pg = pendenciaGigs(gigs);
     if (pg) pendencias.push(pg);
     this.previaGigs.textContent = !lancar
       ? 'Nenhum GIGS será lançado.'
-      : `Será lançado: "${this.textoGigsResolvido() ?? gigs.texto}" · ${gigs.prazo > 0 ? `prazo de ${gigs.prazo} dia(s) útil(eis)` : 'sem prazo'}${data && hora && tr ? '' : ' (as variáveis são preenchidas quando data, hora e tipo estiverem escolhidos)'}`;
+      : `Será lançado: "${this.textoGigsResolvido()}" · ${gigs.prazo > 0 ? `prazo de ${gigs.prazo} dia(s) útil(eis)` : 'sem prazo'}${data && hora && tr?.tipo ? '' : ' (data, hora e tipo entram quando forem escolhidos)'}`;
+    this.previaGigs.title = this.previaGigs.textContent;
 
     // Botão
     const verbo = this.d.antiga ? 'redesignação' : 'designação';
@@ -579,13 +599,61 @@ class Formulario {
     el.title = texto;
   }
 
-  private textoGigsResolvido(): string | null {
-    const data = this.dataValida();
-    const hora = this.horaValida();
-    const tr = this.tipoResolvido();
+  /** Valores das variáveis do GIGS agora (D43). O que ainda não foi escolhido fica de fora. */
+  private dadosVariaveis(): DadosVariaveisGigs {
     const sala = this.salaAtual();
-    if (!data || !hora || !tr?.tipo || !sala) return null;
-    return resolverVariaveis(this.inGigsTexto.value, { data, hora, tipo: tr.tipo.descricao, sala: nomeSala(sala) });
+    return {
+      data: this.dataValida() ?? undefined,
+      hora: this.horaValida() ?? undefined,
+      tipo: this.tipoResolvido()?.tipo?.descricao,
+      sala: sala ? nomeSala(sala) : undefined,
+      acao: this.d.antiga ? 'redesignada' : 'designada',
+      usuario: this.d.nomeUsuario,
+      orgao: this.d.descricaoOrgaoLogado,
+      hash: this.hash,
+    };
+  }
+
+  private textoGigsResolvido(): string {
+    return resolverVariaveis(this.inGigsTexto.value, this.dadosVariaveis());
+  }
+
+  /** Diálogo "Exibir variáveis": cada variável com o que vira agora; clicar insere no texto. */
+  private desenharVariaveis() {
+    const d = this.dadosVariaveis();
+    this.corpoVariaveis.replaceChildren(
+      h(
+        'table',
+        {},
+        ...VARIAVEIS_GIGS.map((v) => {
+          const valor = v.valor(d);
+          const linha = h(
+            'tr',
+            { class: 'clicavel' },
+            h('td', {}, h('code', {}, v.variavel)),
+            h('td', {}, valor ?? h('span', { class: 'suave' }, '(escolha no formulário)')),
+            h('td', { class: 'suave' }, v.descricao),
+          );
+          linha.title = `Inserir ${v.variavel} no texto`;
+          linha.onclick = () => {
+            this.inserirNoTexto(v.variavel);
+            this.dialogoVariaveis.close();
+          };
+          return linha;
+        }),
+      ),
+    );
+  }
+
+  /** Insere no cursor do campo de texto do GIGS (ou no fim, se o campo nunca recebeu foco). */
+  private inserirNoTexto(trecho: string) {
+    const campo = this.inGigsTexto;
+    const inicio = campo.selectionStart ?? campo.value.length;
+    const fim = campo.selectionEnd ?? campo.value.length;
+    campo.value = campo.value.slice(0, inicio) + trecho + campo.value.slice(fim);
+    campo.focus();
+    campo.setSelectionRange(inicio + trecho.length, inicio + trecho.length);
+    this.atualizar();
   }
 
   // ── Pauta do dia ──
@@ -656,15 +724,6 @@ class Formulario {
     );
   }
 
-  /** D28: próximo minuto, a partir do escolhido, sem outro processo começando nele. */
-  private encaixar() {
-    const entradas = this.pauta.entradas;
-    let hora = this.horaValida();
-    if (!entradas || !hora) return;
-    for (let i = 0; i < 180 && ocupanteDoMinuto(entradas, hora, this.d.processo.id); i++) hora = somarUmMinuto(hora);
-    this.inHora.value = hora;
-    this.atualizar();
-  }
 
   // ── Envio ──
 
@@ -704,7 +763,7 @@ class Formulario {
       hora,
       idTipoAudiencia: tr.tipo.id,
       ehJulgamento: this.selBase.value === 'Julgamento',
-      gigs: lancarGigs ? { texto: this.textoGigsResolvido() ?? this.inGigsTexto.value, prazo: Number(this.inGigsPrazo.value) } : undefined,
+      gigs: lancarGigs ? { texto: this.textoGigsResolvido(), prazo: Number(this.inGigsPrazo.value) } : undefined,
       eventos: this.d.eventos,
       hoje: hoje(),
     };
@@ -712,6 +771,10 @@ class Formulario {
     // Envio real: mostra antes o que será gravado e só segue com a confirmação explícita.
     if (!this.simulando && !(await this.confirmarEnvio(pedido, tr.tipo.descricao, nomeSala(sala)))) return;
     if (!this.vivo()) return;
+
+    // D44: o hash desta execução é o da prévia; depois do envio, outro para o próximo.
+    this.hashDaExecucao = lancarGigs && /{s*hashs*}/i.test(this.inGigsTexto.value) ? this.hash : null;
+    this.hash = gerarHash();
 
     this.executando = true;
     this.btnCopiar.disabled = true;
@@ -813,6 +876,7 @@ class Formulario {
       'div',
       {},
       h('div', { class: `resumo ${r.desfecho}` }, r.resumo),
+      this.hashDaExecucao ? h('div', {}, 'Código desta execução (para buscar no GIGS): ', h('strong', {}, this.hashDaExecucao)) : null,
       r.acoes.length ? h('ul', { class: 'aviso-texto' }, ...r.acoes.map((a) => h('li', {}, TEXTO_ACAO[a]))) : null,
       // §2.2, passo 6: a tela do PJe só mostra a audiência nova depois de recarregar.
       gravouDeVerdade
@@ -831,7 +895,7 @@ class Formulario {
   private async copiar() {
     const r = this.ultimoResultado;
     if (!r) return;
-    const linhas = [`AudAid 3.0 · ${this.simulando ? 'SIMULAÇÃO' : 'REAL'} · ${new Date().toLocaleString('pt-BR')}`, `Resultado: ${r.desfecho} · ${r.resumo}`, ''];
+    const linhas = [`AudAid 3.0 · ${this.simulando ? 'SIMULAÇÃO' : 'REAL'} · ${new Date().toLocaleString('pt-BR')}`, `Resultado: ${r.desfecho} · ${r.resumo}`, ...(this.hashDaExecucao ? [`Código desta execução: ${this.hashDaExecucao}`] : []), ''];
     for (const p of r.passos) {
       linhas.push(`# ${p.titulo} [${ROTULO_ESTADO[p.estado]}]${p.detalhe ? ` ${p.detalhe}` : ''}${p.erro ? ` ERRO: ${p.erro.mensagem} (${p.erro.codigoErro ?? '—'})` : ''}`);
       if (p.requisicao) {

@@ -56,9 +56,10 @@ describe('cookies e JWT', () => {
     expect(decodificarJwt('lixo')).toBeNull();
   });
 
-  it('extrai o órgão logado e a expiração', () => {
-    const token = jwt({ exp: 1789993340, orgaoJulgador: { id: 174, descricao: 'CEJUSC - JT - CASCAVEL' } });
+  it('extrai o órgão logado, o nome e a expiração', () => {
+    const token = jwt({ exp: 1789993340, nome: ' FULANO DE TAL ', orgaoJulgador: { id: 174, descricao: 'CEJUSC - JT - CASCAVEL' } });
     const s = lerSessao(`Xsrf-Token=XYZ; access_token=${token}`);
+    expect(s.nomeUsuario).toBe('FULANO DE TAL');
     expect(s.xsrfToken).toBe('XYZ');
     expect(s.accessTokenLegivel).toBe(true);
     expect(s.orgaoLogado).toEqual({ id: 174, descricao: 'CEJUSC - JT - CASCAVEL' });

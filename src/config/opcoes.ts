@@ -53,9 +53,6 @@ export const LIMITES = {
   prazo: { min: 0, max: 240 },
 } as const;
 
-/** Variáveis aceitas no texto do GIGS, resolvidas com os dados da audiência designada (D29b). */
-export const VARIAVEIS_GIGS = ['{data}', '{hora}', '{data e hora}', '{tipo}', '{sala}'] as const;
-
 export function opcoesPadrao(desenvolvimento: boolean): Opcoes {
   return {
     fab: {

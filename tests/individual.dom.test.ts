@@ -74,7 +74,7 @@ beforeEach(() => {
   escritas.length = 0;
   Object.defineProperty(document, 'cookie', {
     configurable: true,
-    get: () => `Xsrf-Token=XYZ; access_token=${jwt({ exp: 4102444800, orgaoJulgador: { id: orgaoLogado, descricao: 'CEJUSC - JT - CASCAVEL' } })}`,
+    get: () => `Xsrf-Token=XYZ; access_token=${jwt({ exp: 4102444800, nome: 'FULANO DE TAL', orgaoJulgador: { id: orgaoLogado, descricao: 'CEJUSC - JT - CASCAVEL' } })}`,
   });
   vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => responder(url, init)));
   document.body.replaceChildren();
@@ -172,15 +172,16 @@ describe('Controle Individual (entrega 3, simulação)', () => {
     expect(p.botao(/Simular/).disabled).toBe(false);
   });
 
-  it('horário ocupado bloqueia; "Encaixar" acha o próximo minuto livre', async () => {
+  it('horário ocupado bloqueia até escolher outro (sem o botão "Encaixar", D45)', async () => {
     const p = abrir();
     await vi.waitFor(() => expect(p.texto()).toContain('Redesignar audiência'));
     p.mudar(p.inp('date'), '2026-10-27');
     p.mudar(p.inp('time'), '10:11');
     await vi.waitFor(() => expect(p.texto()).toContain('já está ocupado pelo processo 0000999-00.2026.5.09.0000'), { timeout: 2000 });
+    expect(p.texto()).toContain('Escolha outro horário na pauta ou digite outro.');
     expect(p.botao(/Simular/).disabled).toBe(true);
-    p.botao(/Encaixar/).click();
-    expect(p.inp('time').value).toBe('10:12');
+    expect([...p.raiz.querySelectorAll('button')].some((b) => /Encaixar/.test(b.textContent ?? ''))).toBe(false);
+    p.mudar(p.inp('time'), '10:12');
     expect(p.texto()).toContain('10:12 está livre na sala');
     expect(p.botao(/Simular/).disabled).toBe(false);
   });
@@ -233,6 +234,47 @@ describe('Controle Individual (entrega 3, simulação)', () => {
     p.botao(/Simular/).click();
     expect(p.texto()).toContain('Você trocou de órgão logado');
     expect(escritas).toEqual([]);
+  });
+});
+
+describe('Variáveis do GIGS (D43, D44)', () => {
+  it('"Exibir variáveis": valores atuais, clique insere no texto; o hash da prévia é o que vai no GIGS', async () => {
+    const p = abrir();
+    await vi.waitFor(() => expect(p.texto()).toContain('Redesignar audiência'));
+    const [, , , , gigs] = p.sel();
+    const btn = p.botao(/Exibir variáveis/);
+    expect(btn.disabled).toBe(true); // opção vazia: não lança GIGS
+
+    p.mudar(gigs!, 'outro');
+    expect(btn.disabled).toBe(false);
+    p.mudar(p.inp('text'), 'Por ');
+
+    btn.click();
+    const dialogo = p.raiz.querySelectorAll('dialog')[1]!;
+    expect(dialogo.hasAttribute('open')).toBe(true);
+    const texto = dialogo.textContent ?? '';
+    for (const v of ['{data}', '{hora}', '{data e hora}', '{tipo}', '{sala}', '{acao}', '{eu}', '{orgao}', '{hash}']) expect(texto).toContain(v);
+    expect(texto).toContain('FULANO DE TAL');
+    expect(texto).toContain('CEJUSC - JT - CASCAVEL');
+    expect(texto).toContain('redesignada');
+    expect(texto).toContain('(escolha no formulário)'); // data ainda não escolhida
+    const hash = /AUD-[23456789A-Z]{8}/.exec(texto)![0];
+
+    // Clicar em {eu} insere no fim do texto (o campo nunca recebeu o cursor).
+    [...dialogo.querySelectorAll('tr')].find((tr) => tr.textContent?.includes('{eu}'))!.click();
+    expect(p.inp('text').value).toBe('Por {eu}');
+    p.mudar(p.inp('text'), 'Por {eu} · {acao} · {hash} · {dia}');
+    expect(p.texto()).toContain(`Será lançado: "Por FULANO DE TAL · redesignada · ${hash} · {dia}"`);
+
+    p.mudar(p.inp('date'), '2026-10-27');
+    p.mudar(p.inp('time'), '10:12');
+    await vi.waitFor(() => expect(p.botao(/Simular/).disabled).toBe(false), { timeout: 2000 });
+    p.botao(/Simular/).click();
+    await vi.waitFor(() => expect(p.texto()).toContain('Simulação concluída'), { timeout: 2000 });
+    expect(p.texto()).toContain(`"observacao": "Por FULANO DE TAL · redesignada · ${hash} · {dia}"`);
+    expect(p.texto()).toContain(`Código desta execução (para buscar no GIGS): ${hash}`);
+    // Depois do envio, o próximo envio terá outro código.
+    expect(p.texto()).not.toContain(`Será lançado: "Por FULANO DE TAL · redesignada · ${hash}`);
   });
 });
 
