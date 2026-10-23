@@ -105,6 +105,7 @@ function desenharPrevia(o: Opcoes) {
 function desenharGigs() {
   const linhas = sugestoes.map((s, i) => {
     const texto = h('input', { type: 'text', value: s.texto });
+    texto.maxLength = LIMITES.textoGigs; // limite do campo Observação do GIGS no PJe
     texto.addEventListener('input', () => {
       sugestoes[i] = { ...sugestoes[i]!, texto: texto.value };
       agendarSalvar();

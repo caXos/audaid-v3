@@ -193,6 +193,21 @@ describe('GIGS: variáveis e validação (D29b)', () => {
     expect(gerarHash(fonte)).toBe('AUD-22222222');
   });
 
+  it('limite de 4000 caracteres do GIGS, contado no texto já resolvido', () => {
+    expect(pendenciaGigs({ lancar: true, texto: 'x'.repeat(4000), prazo: 2 })).toBeNull();
+    expect(pendenciaGigs({ lancar: true, texto: 'x'.repeat(4001), prazo: 2 })).toBe(
+      'O texto do GIGS tem 4001 caracteres (com as variáveis preenchidas); o limite do PJe é 4000.',
+    );
+    // 3993 + "{orgao}" (7) = 4000 antes de resolver; depois de resolver passa do limite.
+    const bruto = 'x'.repeat(3993) + '{orgao}';
+    expect(bruto.length).toBe(4000);
+    const resolvido = resolverVariaveis(bruto, { orgao: 'CEJUSC - JT - CASCAVEL' });
+    expect(resolvido.length).toBe(3993 + 22);
+    expect(pendenciaGigs({ lancar: true, texto: resolvido, prazo: 2 })).toMatch(/4015 caracteres/);
+    // Sem lançar GIGS, o tamanho não importa.
+    expect(pendenciaGigs({ lancar: false, texto: 'x'.repeat(9999), prazo: 2 })).toBeNull();
+  });
+
   it('valida texto e prazo só quando vai lançar', () => {
     expect(pendenciaGigs({ lancar: false, texto: '', prazo: -1 })).toBeNull();
     expect(pendenciaGigs({ lancar: true, texto: 'ok', prazo: 0 })).toBeNull();

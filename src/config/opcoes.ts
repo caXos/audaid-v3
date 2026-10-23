@@ -51,6 +51,8 @@ export const LIMITES = {
   tamanho: { min: 16, max: 64 },
   espessura: { min: 1, max: 6 },
   prazo: { min: 0, max: 240 },
+  /** Limite do campo Observação do GIGS no PJe ("0 / 4000" no formulário nativo). */
+  textoGigs: 4000,
 } as const;
 
 export function opcoesPadrao(desenvolvimento: boolean): Opcoes {
@@ -112,7 +114,7 @@ export function normalizarOpcoes(bruto: unknown, desenvolvimento: boolean): Opco
         .map(objeto)
         .filter((s) => typeof s['texto'] === 'string' && (s['texto'] as string).trim() !== '')
         .map((s) => ({
-          texto: (s['texto'] as string).trim(),
+          texto: (s['texto'] as string).trim().slice(0, LIMITES.textoGigs),
           prazo: inteiro(s['prazo'], 2, LIMITES.prazo.min, LIMITES.prazo.max),
         }))
     : p.gigs.sugestoes;

@@ -54,6 +54,11 @@ describe('opções', () => {
     expect(o.simulacao).toBe(true);
   });
 
+  it('sugestão de GIGS salva com mais de 4000 caracteres é cortada no limite do PJe', () => {
+    const o = normalizarOpcoes({ gigs: { sugestoes: [{ texto: 'y'.repeat(5000), prazo: 2 }] } }, false);
+    expect(o.gigs.sugestoes[0]?.texto.length).toBe(4000);
+  });
+
   it('lista de sugestões vazia é respeitada (o usuário apagou todas)', () => {
     expect(normalizarOpcoes({ gigs: { sugestoes: [] } }, false).gigs.sugestoes).toEqual([]);
   });

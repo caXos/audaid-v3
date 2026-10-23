@@ -278,6 +278,32 @@ describe('Variáveis do GIGS (D43, D44)', () => {
   });
 });
 
+describe('Limite de 4000 caracteres do GIGS no painel', () => {
+  it('contador na prévia; acima de 4000 (já com as variáveis) bloqueia; 4000 passa', async () => {
+    const p = abrir();
+    await vi.waitFor(() => expect(p.texto()).toContain('Redesignar audiência'));
+    const [, , , , gigs] = p.sel();
+    p.mudar(gigs!, 'outro');
+    p.mudar(p.inp('date'), '2026-10-27');
+    p.mudar(p.inp('time'), '10:12');
+    await vi.waitFor(() => expect(p.texto()).toContain('10:12 está livre na sala'), { timeout: 2000 });
+
+    p.mudar(p.inp('text'), 'x'.repeat(4000));
+    expect(p.texto()).toContain('(4000/4000) Será lançado');
+    expect(p.botao(/Simular/).disabled).toBe(false);
+
+    p.mudar(p.inp('text'), 'x'.repeat(4001));
+    expect(p.texto()).toContain('(4001/4000)');
+    expect(p.texto()).toContain('O texto do GIGS tem 4001 caracteres (com as variáveis preenchidas); o limite do PJe é 4000.');
+    expect(p.botao(/Simular/).disabled).toBe(true);
+
+    // 3993 + "{orgao}" = 4000 digitados, mas 4015 depois de resolver.
+    p.mudar(p.inp('text'), 'x'.repeat(3993) + '{orgao}');
+    expect(p.texto()).toContain('(4015/4000)');
+    expect(p.botao(/Simular/).disabled).toBe(true);
+  });
+});
+
 describe('Controle Individual (entrega 4, envio real)', () => {
   async function prontoParaGravar(gigs?: string) {
     processoDigital = false;

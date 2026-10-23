@@ -1,6 +1,6 @@
 // Controle Individual (§2.2 do blueprint). Entrega 3: completo, mas as escritas são simuladas.
 
-import type { Opcoes } from '../config/opcoes';
+import { LIMITES, type Opcoes } from '../config/opcoes';
 import {
   ESCRITA_LIBERADA,
   executarDesignacao,
@@ -577,12 +577,14 @@ class Formulario {
     this.inGigsTexto.disabled = !lancar;
     this.inGigsPrazo.disabled = !lancar;
     this.btnVariaveis.disabled = !lancar;
-    const gigs = { lancar, texto: this.inGigsTexto.value, prazo: Number(this.inGigsPrazo.value) };
+    // Validação sobre o texto JÁ resolvido: as variáveis podem fazê-lo passar de 4000 caracteres.
+    const textoFinal = this.textoGigsResolvido();
+    const gigs = { lancar, texto: textoFinal, prazo: Number(this.inGigsPrazo.value) };
     const pg = pendenciaGigs(gigs);
     if (pg) pendencias.push(pg);
     this.previaGigs.textContent = !lancar
       ? 'Nenhum GIGS será lançado.'
-      : `Será lançado: "${this.textoGigsResolvido()}" · ${gigs.prazo > 0 ? `prazo de ${gigs.prazo} dia(s) útil(eis)` : 'sem prazo'}${data && hora && tr?.tipo ? '' : ' (data, hora e tipo entram quando forem escolhidos)'}`;
+      : `(${textoFinal.length}/${LIMITES.textoGigs}) Será lançado: "${textoFinal}" · ${gigs.prazo > 0 ? `prazo de ${gigs.prazo} dia(s) útil(eis)` : 'sem prazo'}${data && hora && tr?.tipo ? '' : ' (data, hora e tipo entram quando forem escolhidos)'}`;
     this.previaGigs.title = this.previaGigs.textContent;
 
     // Botão

@@ -159,6 +159,22 @@ describe('executor: caminho feliz', () => {
     expect(t.recebidas[3]?.corpo).toMatchObject({ dataInicioPrazo: '2026-10-22', dataPrazo: '2026-10-26', observacao: 'Analisar', idProcesso: '100' });
   });
 
+  it('GIGS acima de 4000 caracteres não é enviado; a audiência continua designada', async () => {
+    const t = falso(roteiroPadrao());
+    const r = await executarDesignacao(pedido({ gigs: { texto: 'x'.repeat(4001), prazo: 2 } }), t);
+    expect(r.desfecho).toBe('parcial');
+    expect(r.resumo).toMatch(/O GIGS não foi lançado/);
+    expect(ordem(t)).toEqual(['GET /pje-comum-api/api/pautasaudiencias/classificacoes/dia', 'POST /pje-comum-api/api/pautasaudiencias/audiencias']);
+    expect(r.passos.at(-1)).toMatchObject({ titulo: 'Lançar o GIGS', estado: 'erro' });
+  });
+
+  it('GIGS com exatamente 4000 caracteres é enviado', async () => {
+    const t = falso(roteiroPadrao());
+    const r = await executarDesignacao(pedido({ gigs: { texto: 'x'.repeat(4000), prazo: 0 } }), t);
+    expect(r.desfecho).toBe('sucesso');
+    expect((t.recebidas.at(-1)?.corpo as { observacao: string }).observacao.length).toBe(4000);
+  });
+
   it('GIGS com prazo 0 não consulta prazo nem manda datas', async () => {
     const t = falso(roteiroPadrao());
     await executarDesignacao(pedido({ gigs: { texto: 'Analisar', prazo: 0 } }), t);

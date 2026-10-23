@@ -106,10 +106,16 @@ export interface EscolhaGigs {
   prazo: number;
 }
 
-/** Pendência que impede o envio, ou `null` se está tudo certo. */
+/**
+ * Pendência que impede o envio, ou `null` se está tudo certo. `texto` deve ser o texto JÁ com as
+ * variáveis resolvidas: são elas que podem fazê-lo passar do limite de 4000 caracteres do GIGS.
+ */
 export function pendenciaGigs(e: EscolhaGigs): string | null {
   if (!e.lancar) return null;
   if (!e.texto.trim()) return 'Escreva o texto do GIGS (ou escolha a opção vazia para não lançar).';
+  if (e.texto.length > LIMITES.textoGigs) {
+    return `O texto do GIGS tem ${e.texto.length} caracteres (com as variáveis preenchidas); o limite do PJe é ${LIMITES.textoGigs}.`;
+  }
   if (!Number.isInteger(e.prazo) || e.prazo < LIMITES.prazo.min || e.prazo > LIMITES.prazo.max) {
     return `O prazo do GIGS deve ser um número inteiro de ${LIMITES.prazo.min} a ${LIMITES.prazo.max} dias úteis.`;
   }

@@ -4,6 +4,7 @@
 // (recolocar 100% Digital, SEMPRE) → (GIGS). Quem fala com o PJe é um Transporte: o real, o
 // simulado ou o falso dos testes.
 
+import { LIMITES } from '../config/opcoes';
 import { caminhos, type Audiencia, type EventoCalendario, type PautaDia } from '../pje/api';
 import {
   caminhosEscrita,
@@ -257,7 +258,15 @@ export async function executarDesignacao(
   if (p.gigs) {
     let prazo: { dataInicio: string; dataFim: string } | undefined;
     let gigsOk = true;
-    if (p.gigs.prazo > 0) {
+    // Defesa: o painel já impede, mas texto acima do limite do PJe nunca é enviado.
+    if (p.gigs.texto.length > LIMITES.textoGigs) {
+      gigsOk = false;
+      registrar({
+        titulo: 'Lançar o GIGS',
+        estado: 'erro',
+        detalhe: `O texto do GIGS tem ${p.gigs.texto.length} caracteres; o limite do PJe é ${LIMITES.textoGigs}. O GIGS não foi lançado.`,
+      });
+    } else if (p.gigs.prazo > 0) {
       const reqPrazo: Requisicao = { metodo: 'GET', caminho: caminhosEscrita.retornaPrazo(p.gigs.prazo, p.idOrgaoLogado, p.hoje) };
       const rPrazo = await t.enviar(reqPrazo);
       const dataFim = rPrazo.ok ? lerRetornaPrazo(rPrazo.dados) : undefined;
