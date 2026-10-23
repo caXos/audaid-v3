@@ -141,7 +141,7 @@ export function normalizarOpcoes(bruto: unknown, desenvolvimento: boolean): Opco
 // ── Termos (D22) ────────────────────────────────────────────────────────────────────────────
 
 /** Sobe quando o texto dos termos muda de forma relevante: o aceite anterior deixa de valer. */
-export const VERSAO_TERMOS = 1;
+export const VERSAO_TERMOS = 2; // v2 (23/10/2026): menciona a leitura do nome do usuário (variável {eu}, D43)
 
 export interface Aceite {
   versao: number;

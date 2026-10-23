@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AudAid: política de privacidade</title>
+  <meta name="description" content="Política de privacidade da extensão AudAid para o PJe dos Tribunais Regionais do Trabalho.">
+  <link rel="stylesheet" href="estilo.css">
+  <link rel="icon" href="audaid.svg" type="image/svg+xml">
+</head>
+<body>
+<main>
+  <header>
+    <img src="audaid.svg" alt="">
+    <div>
+      <h1>AudAid: política de privacidade</h1>
+      <p>Versão 2 dos termos · vigente desde 23/10/2026 · vale para a extensão AudAid 3.x (Firefox, Chrome e Edge)</p>
+    </div>
+  </header>
+
+  <section class="destaque">
+    <h2>Resumo</h2>
+    <ul>
+      <li><strong>O AudAid age em seu nome no PJe</strong>, usando a sessão que você já abriu no navegador.</li>
+      <li><strong>Ele só conversa com o PJe do seu tribunal.</strong> Nenhum dado é enviado a qualquer outro
+        servidor, nem ao autor da extensão.</li>
+      <li><strong>Não há coleta, estatística, rastreamento, publicidade nem venda de dados.</strong></li>
+      <li>No seu navegador fica guardado só o que você configura (opções e o aceite dos termos).</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>O que é o AudAid</h2>
+    <p>
+      O AudAid é uma extensão de navegador que ajuda assistentes de audiência dos Tribunais Regionais do
+      Trabalho a designar e redesignar audiências no PJe sem sair da tela do processo. Ela funciona
+      apenas nas páginas do PJe dos TRTs (endereços <code>pje.trtN.jus.br</code>,
+      <code>pje-homologacao.trtN.jus.br</code> e <code>pje-treinamento.trtN.jus.br</code>).
+    </p>
+  </section>
+
+  <section>
+    <h2>Como o AudAid usa a sua sessão do PJe</h2>
+    <p>
+      Para ler e gravar no PJe, o AudAid faz as mesmas requisições que as telas do PJe fazem, de dentro da
+      página do PJe aberta no seu navegador. Elas levam os cookies de sessão e o token de segurança (XSRF)
+      que o próprio PJe guardou quando você fez login. Por isso, <strong>tudo o que o AudAid grava fica
+      registrado no seu nome</strong>, como se você tivesse feito pelas telas do PJe.
+    </p>
+    <p>
+      O AudAid também lê, <strong>localmente</strong>, dois dados do token de acesso que o PJe guarda no
+      navegador: o <strong>órgão julgador em que você está logado</strong> (para só mexer nas audiências desse
+      órgão) e o <strong>seu nome</strong> (só para preencher a variável <code>{eu}</code> no texto do GIGS,
+      se você a usar). Esses dados não saem do seu navegador, a não ser dentro das requisições ao próprio PJe.
+    </p>
+    <p>O AudAid nunca lê nem guarda sua senha ou seu certificado digital.</p>
+  </section>
+
+  <section>
+    <h2>O que o AudAid lê e grava no PJe</h2>
+    <table>
+      <tr><th>Lê (como as telas do PJe)</th><th>Grava (só quando você pede e confirma)</th></tr>
+      <tr>
+        <td>dados do processo, audiências do processo, salas, pauta do dia da sala, tipos de audiência,
+          calendário de feriados e suspensões do órgão</td>
+        <td>designação ou redesignação de audiência; atividade no GIGS (opcional); retirada e
+          recolocação do Juízo 100% Digital, só para designar audiência de Julgamento</td>
+      </tr>
+    </table>
+    <p>
+      Antes de gravar, o AudAid mostra um resumo do que vai fazer e pede a sua confirmação. Há também um
+      <strong>modo simulação</strong>, que mostra as requisições sem enviar nenhuma.
+    </p>
+  </section>
+
+  <section>
+    <h2>O que fica guardado no seu navegador</h2>
+    <ul>
+      <li>As suas <strong>opções</strong>: posição e estilo do botão, sugestões de texto do GIGS e o modo
+        simulação.</li>
+      <li>A <strong>data e a versão</strong> em que você aceitou os termos de uso.</li>
+    </ul>
+    <p>
+      Esses dados ficam no armazenamento local da extensão, só neste navegador, e não são sincronizados nem
+      enviados a lugar nenhum. <strong>Desinstalar a extensão apaga tudo.</strong> Você também pode revogar o
+      aceite nas Opções do AudAid.
+    </p>
+  </section>
+
+  <section>
+    <h2>O que o AudAid não faz</h2>
+    <ul>
+      <li>Não envia dados a servidores do autor nem de terceiros.</li>
+      <li>Não usa serviços de estatística, de rastreamento ou de publicidade.</li>
+      <li>Não vende, não aluga e não compartilha dados.</li>
+      <li>Não carrega nem executa código remoto: todo o código está no pacote da extensão.</li>
+    </ul>
+    <p>
+      O uso das informações recebidas pelo AudAid segue a Política de Dados do Usuário da Chrome Web Store,
+      incluindo os requisitos de Uso Limitado: os dados são usados apenas para a finalidade única da
+      extensão, que é designar e acompanhar audiências no PJe a pedido do usuário.
+    </p>
+  </section>
+
+  <section>
+    <h2>Permissões pedidas pela extensão</h2>
+    <table>
+      <tr><th>Permissão</th><th>Para quê</th></tr>
+      <tr><td><code>storage</code></td><td>guardar as suas opções e o aceite dos termos, localmente</td></tr>
+      <tr><td>acesso aos sites do PJe dos 24 TRTs (produção, homologação e treinamento)</td><td>mostrar o botão do AudAid nas telas do processo e fazer as requisições ao PJe com a sua sessão</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>Código aberto para conferência</h2>
+    <p>
+      O código do AudAid é público, para que qualquer pessoa confira o que ele faz:
+      <a href="https://github.com/caXos/audaid-v3">github.com/caXos/audaid-v3</a>.
+    </p>
+  </section>
+
+  <section>
+    <h2>Contato e mudanças nesta política</h2>
+    <p>
+      Dúvidas ou problemas: abra uma issue em
+      <a href="https://github.com/caXos/audaid-v3/issues">github.com/caXos/audaid-v3/issues</a>.
+      Se esta política mudar de forma relevante, a versão acima muda, e a extensão pede um novo aceite dos
+      termos.
+    </p>
+  </section>
+
+  <footer>AudAid · © Jorge Henrique Bueno Gomez · <a href="./">página inicial</a></footer>
+</main>
+</body>
+</html>

@@ -14,6 +14,8 @@ Extensão para **Firefox, Chrome e Edge** que ajuda assistentes de audiência do
 >   outro servidor**, nem ao autor da extensão.
 > - Antes do primeiro uso, a extensão pede que você leia e aceite estes termos.
 > - Use só se você entende e concorda com isso.
+>
+> Política de privacidade: https://caxos.github.io/audaid-v3/privacidade.html
 
 ## Estado
 
@@ -34,7 +36,8 @@ será gravado, antes de cada envio.
 - Aviso quando a versão antiga (v1) também está instalada.
 
 `npm run build` gera a versão de desenvolvimento, com o modo simulação ligado por padrão.
-`npm run build:release` gera a versão das lojas.
+`npm run build:release` gera a versão das lojas. `npm run pacotes` gera os zips para as lojas (passo a
+passo em `docs/lojas/checklist-publicacao.md`).
 
 ## Compilar
 
