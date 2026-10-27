@@ -3,6 +3,7 @@
 // ponta e, na entrega 3, nenhuma requisição de escrita sai.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { nextTick } from 'vue';
 import { opcoesPadrao } from '../src/config/opcoes';
 import { ControleIndividual } from '../src/individual/painel';
 import { lerAmbiente } from '../src/pje/ambiente';
@@ -91,12 +92,19 @@ function abrir(simulacao = true) {
   const inp = (tipo: string) => raiz.querySelector<HTMLInputElement>(`input[type="${tipo}"]`)!;
   const botao = (texto: RegExp) => [...raiz.querySelectorAll('button')].find((b) => texto.test(b.textContent ?? ''))!;
   const texto = () => raiz.textContent ?? '';
-  const mudar = (el: HTMLInputElement | HTMLSelectElement, valor: string | boolean) => {
+  // O navegador dispara `input` e `change`; o Vue redesenha no tick seguinte, por isso o `await`.
+  const mudar = async (el: HTMLInputElement | HTMLSelectElement, valor: string | boolean) => {
     if (typeof valor === 'boolean') (el as HTMLInputElement).checked = valor;
     else el.value = valor;
+    el.dispatchEvent(new Event('input'));
     el.dispatchEvent(new Event('change'));
+    await nextTick();
   };
-  return { raiz, sel, inp, botao, texto, mudar };
+  const clicar = async (el: HTMLElement) => {
+    el.click();
+    await nextTick();
+  };
+  return { raiz, sel, inp, botao, texto, mudar, clicar };
 }
 
 describe('Controle Individual (entrega 3, simulação)', () => {
@@ -129,10 +137,10 @@ describe('Controle Individual (entrega 3, simulação)', () => {
     expect(semana!.value).toBe('nenhuma');
     expect(p.texto()).toContain('fase atual do processo: Execução');
     expect(p.texto()).toContain('Será designada: Conciliação em Execução');
-    p.mudar(p.inp('checkbox'), true);
+    await p.mudar(p.inp('checkbox'), true);
     expect(p.texto()).toContain('Conciliação em Execução por videoconferência');
     // Tipo que não é conciliação: a fase fica desabilitada.
-    p.mudar(base!, 'Instrução');
+    await p.mudar(base!, 'Instrução');
     expect(fase!.disabled).toBe(true);
     expect(p.inp('checkbox').disabled).toBe(false);
   });
@@ -144,20 +152,20 @@ describe('Controle Individual (entrega 3, simulação)', () => {
     expect(verPauta.disabled).toBe(true);
     expect(p.texto()).toContain('Escolha sala e data: a pauta do dia é consultada na hora.');
 
-    p.mudar(p.inp('date'), '2026-10-27');
+    await p.mudar(p.inp('date'), '2026-10-27');
     // Logo ao escolher a data, antes da resposta: indicador de consulta.
     expect(p.raiz.querySelector('.msg.carregando')?.textContent).toBe('Consultando a pauta do dia…');
     await vi.waitFor(() => expect(p.texto()).toContain('Pauta do dia: 1 audiência(s), 1 vaga(s). Escolha o horário na pauta ou digite.'), { timeout: 2000 });
     expect(verPauta.disabled).toBe(false);
 
-    verPauta.click();
+    await p.clicar(verPauta);
     const dialogo = p.raiz.querySelector('dialog.dialogo-pauta')!;
     expect(dialogo.hasAttribute('open')).toBe(true);
     expect(dialogo.textContent).toContain('Pauta do dia · Sala 01 · 27/10/2026');
     expect(dialogo.textContent).toContain('Clique numa vaga para usar o horário dela.');
     const vaga = dialogo.querySelector<HTMLTableRowElement>('tr.clicavel')!;
     expect(vaga.textContent).toContain('10:30');
-    vaga.click();
+    await p.clicar(vaga);
     expect(p.inp('time').value).toBe('10:30');
     expect(p.texto()).toContain('10:30: vaga configurada na sala, pode usar.');
   });
@@ -165,8 +173,8 @@ describe('Controle Individual (entrega 3, simulação)', () => {
   it('dia sem audiência nem vaga ({dia} sem pautasDoDia) libera o horário', async () => {
     const p = abrir();
     await vi.waitFor(() => expect(p.texto()).toContain('Redesignar audiência'));
-    p.mudar(p.inp('date'), '2026-12-16');
-    p.mudar(p.inp('time'), '09:00');
+    await p.mudar(p.inp('date'), '2026-12-16');
+    await p.mudar(p.inp('time'), '09:00');
     await vi.waitFor(() => expect(p.texto()).toContain('09:00 está livre na sala'), { timeout: 2000 });
     expect(p.texto()).toContain('Nenhuma audiência nem vaga nesta sala neste dia');
     expect(p.botao(/Simular/).disabled).toBe(false);
@@ -175,13 +183,13 @@ describe('Controle Individual (entrega 3, simulação)', () => {
   it('horário ocupado bloqueia até escolher outro (sem o botão "Encaixar", D45)', async () => {
     const p = abrir();
     await vi.waitFor(() => expect(p.texto()).toContain('Redesignar audiência'));
-    p.mudar(p.inp('date'), '2026-10-27');
-    p.mudar(p.inp('time'), '10:11');
+    await p.mudar(p.inp('date'), '2026-10-27');
+    await p.mudar(p.inp('time'), '10:11');
     await vi.waitFor(() => expect(p.texto()).toContain('já está ocupado pelo processo 0000999-00.2026.5.09.0000'), { timeout: 2000 });
     expect(p.texto()).toContain('Escolha outro horário na pauta ou digite outro.');
     expect(p.botao(/Simular/).disabled).toBe(true);
     expect([...p.raiz.querySelectorAll('button')].some((b) => /Encaixar/.test(b.textContent ?? ''))).toBe(false);
-    p.mudar(p.inp('time'), '10:12');
+    await p.mudar(p.inp('time'), '10:12');
     expect(p.texto()).toContain('10:12 está livre na sala');
     expect(p.botao(/Simular/).disabled).toBe(false);
   });
@@ -189,12 +197,12 @@ describe('Controle Individual (entrega 3, simulação)', () => {
   it('data bloqueada e data só com prazo suspenso', async () => {
     const p = abrir();
     await vi.waitFor(() => expect(p.texto()).toContain('Redesignar audiência'));
-    p.mudar(p.inp('time'), '09:00');
-    p.mudar(p.inp('date'), '2026-12-25');
+    await p.mudar(p.inp('time'), '09:00');
+    await p.mudar(p.inp('date'), '2026-12-25');
     expect(p.texto()).toContain('Data bloqueada: Nascimento de Jesus Cristo');
     await vi.waitFor(() => expect(p.texto()).toContain('09:00 está livre'), { timeout: 2000 });
     expect(p.botao(/Simular/).disabled).toBe(true);
-    p.mudar(p.inp('date'), '2026-06-29');
+    await p.mudar(p.inp('date'), '2026-06-29');
     expect(p.texto()).toContain('Atenção: Suspensão de Prazos - jogo da copa 2026');
   });
 
@@ -202,16 +210,16 @@ describe('Controle Individual (entrega 3, simulação)', () => {
     const p = abrir();
     await vi.waitFor(() => expect(p.texto()).toContain('Redesignar audiência'));
     const [, base, , , gigs] = p.sel();
-    p.mudar(base!, 'Julgamento');
+    await p.mudar(base!, 'Julgamento');
     expect(p.inp('checkbox').disabled).toBe(true);
     expect(p.texto()).toContain('vai retirar o Juízo 100% Digital');
-    p.mudar(p.inp('date'), '2026-10-27');
-    p.mudar(p.inp('time'), '10:12');
-    p.mudar(gigs!, 's3'); // "Audiência gerada pelo AudAid em {data e hora}"
+    await p.mudar(p.inp('date'), '2026-10-27');
+    await p.mudar(p.inp('time'), '10:12');
+    await p.mudar(gigs!, 's3'); // "Audiência gerada pelo AudAid em {data e hora}"
     expect(p.texto()).toContain('Será lançado: "Audiência gerada pelo AudAid em 27/10/2026, às 10h12" · prazo de 2 dia(s)');
     await vi.waitFor(() => expect(p.botao(/Simular redesignação/).disabled).toBe(false), { timeout: 2000 });
 
-    p.botao(/Simular redesignação/).click();
+    await p.clicar(p.botao(/Simular redesignação/));
     await vi.waitFor(() => expect(p.texto()).toContain('Simulação concluída: nada foi gravado no PJe.'), { timeout: 2000 });
     const texto = p.texto();
     for (const passo of ['Retirar o Juízo 100% Digital', 'Redesignar a audiência', 'Recolocar o Juízo 100% Digital', 'Calcular o prazo do GIGS', 'Lançar o GIGS']) {
@@ -227,11 +235,11 @@ describe('Controle Individual (entrega 3, simulação)', () => {
   it('se o órgão logado mudou em outra aba, nada é feito (D5)', async () => {
     const p = abrir();
     await vi.waitFor(() => expect(p.texto()).toContain('Redesignar audiência'));
-    p.mudar(p.inp('date'), '2026-10-27');
-    p.mudar(p.inp('time'), '10:12');
+    await p.mudar(p.inp('date'), '2026-10-27');
+    await p.mudar(p.inp('time'), '10:12');
     await vi.waitFor(() => expect(p.botao(/Simular/).disabled).toBe(false), { timeout: 2000 });
     orgaoLogado = 49;
-    p.botao(/Simular/).click();
+    await p.clicar(p.botao(/Simular/));
     expect(p.texto()).toContain('Você trocou de órgão logado');
     expect(escritas).toEqual([]);
   });
@@ -245,11 +253,11 @@ describe('Variáveis do GIGS (D43, D44)', () => {
     const btn = p.botao(/Exibir variáveis/);
     expect(btn.disabled).toBe(true); // opção vazia: não lança GIGS
 
-    p.mudar(gigs!, 'outro');
+    await p.mudar(gigs!, 'outro');
     expect(btn.disabled).toBe(false);
-    p.mudar(p.inp('text'), 'Por ');
+    await p.mudar(p.inp('text'), 'Por ');
 
-    btn.click();
+    await p.clicar(btn);
     const dialogo = p.raiz.querySelectorAll('dialog')[1]!;
     expect(dialogo.hasAttribute('open')).toBe(true);
     const texto = dialogo.textContent ?? '';
@@ -261,15 +269,15 @@ describe('Variáveis do GIGS (D43, D44)', () => {
     const hash = /AUD-[23456789A-Z]{8}/.exec(texto)![0];
 
     // Clicar em {eu} insere no fim do texto (o campo nunca recebeu o cursor).
-    [...dialogo.querySelectorAll('tr')].find((tr) => tr.textContent?.includes('{eu}'))!.click();
+    await p.clicar([...dialogo.querySelectorAll('tr')].find((tr) => tr.textContent?.includes('{eu}'))!);
     expect(p.inp('text').value).toBe('Por {eu}');
-    p.mudar(p.inp('text'), 'Por {eu} · {acao} · {hash} · {dia}');
+    await p.mudar(p.inp('text'), 'Por {eu} · {acao} · {hash} · {dia}');
     expect(p.texto()).toContain(`Será lançado: "Por FULANO DE TAL · redesignada · ${hash} · {dia}"`);
 
-    p.mudar(p.inp('date'), '2026-10-27');
-    p.mudar(p.inp('time'), '10:12');
+    await p.mudar(p.inp('date'), '2026-10-27');
+    await p.mudar(p.inp('time'), '10:12');
     await vi.waitFor(() => expect(p.botao(/Simular/).disabled).toBe(false), { timeout: 2000 });
-    p.botao(/Simular/).click();
+    await p.clicar(p.botao(/Simular/));
     await vi.waitFor(() => expect(p.texto()).toContain('Simulação concluída'), { timeout: 2000 });
     expect(p.texto()).toContain(`"observacao": "Por FULANO DE TAL · redesignada · ${hash} · {dia}"`);
     expect(p.texto()).toContain(`Código desta execução (para buscar no GIGS): ${hash}`);
@@ -280,12 +288,12 @@ describe('Variáveis do GIGS (D43, D44)', () => {
   it('"{ hash }" com espaços também mostra o código da execução', async () => {
     const p = abrir();
     await vi.waitFor(() => expect(p.texto()).toContain('Redesignar audiência'));
-    p.mudar(p.sel()[4]!, 'outro');
-    p.mudar(p.inp('text'), 'Lote { hash }');
-    p.mudar(p.inp('date'), '2026-10-27');
-    p.mudar(p.inp('time'), '10:12');
+    await p.mudar(p.sel()[4]!, 'outro');
+    await p.mudar(p.inp('text'), 'Lote { hash }');
+    await p.mudar(p.inp('date'), '2026-10-27');
+    await p.mudar(p.inp('time'), '10:12');
     await vi.waitFor(() => expect(p.botao(/Simular/).disabled).toBe(false), { timeout: 2000 });
-    p.botao(/Simular/).click();
+    await p.clicar(p.botao(/Simular/));
     await vi.waitFor(() => expect(p.texto()).toContain('Simulação concluída'), { timeout: 2000 });
     expect(p.texto()).toMatch(/Código desta execução \(para buscar no GIGS\): AUD-[23456789A-Z]{8}/);
   });
@@ -296,22 +304,22 @@ describe('Limite de 4000 caracteres do GIGS no painel', () => {
     const p = abrir();
     await vi.waitFor(() => expect(p.texto()).toContain('Redesignar audiência'));
     const [, , , , gigs] = p.sel();
-    p.mudar(gigs!, 'outro');
-    p.mudar(p.inp('date'), '2026-10-27');
-    p.mudar(p.inp('time'), '10:12');
+    await p.mudar(gigs!, 'outro');
+    await p.mudar(p.inp('date'), '2026-10-27');
+    await p.mudar(p.inp('time'), '10:12');
     await vi.waitFor(() => expect(p.texto()).toContain('10:12 está livre na sala'), { timeout: 2000 });
 
-    p.mudar(p.inp('text'), 'x'.repeat(4000));
+    await p.mudar(p.inp('text'), 'x'.repeat(4000));
     expect(p.texto()).toContain('(4000/4000) Será lançado');
     expect(p.botao(/Simular/).disabled).toBe(false);
 
-    p.mudar(p.inp('text'), 'x'.repeat(4001));
+    await p.mudar(p.inp('text'), 'x'.repeat(4001));
     expect(p.texto()).toContain('(4001/4000)');
     expect(p.texto()).toContain('O texto do GIGS tem 4001 caracteres (com as variáveis preenchidas); o limite do PJe é 4000.');
     expect(p.botao(/Simular/).disabled).toBe(true);
 
     // 3993 + "{orgao}" = 4000 digitados, mas 4015 depois de resolver.
-    p.mudar(p.inp('text'), 'x'.repeat(3993) + '{orgao}');
+    await p.mudar(p.inp('text'), 'x'.repeat(3993) + '{orgao}');
     expect(p.texto()).toContain('(4015/4000)');
     expect(p.botao(/Simular/).disabled).toBe(true);
   });
@@ -322,9 +330,9 @@ describe('Controle Individual (entrega 4, envio real)', () => {
     processoDigital = false;
     const p = abrir(false);
     await vi.waitFor(() => expect(p.texto()).toContain('Redesignar audiência'));
-    p.mudar(p.inp('date'), '2026-10-27');
-    p.mudar(p.inp('time'), '10:12');
-    if (gigs) p.mudar(p.sel()[4]!, gigs);
+    await p.mudar(p.inp('date'), '2026-10-27');
+    await p.mudar(p.inp('time'), '10:12');
+    if (gigs) await p.mudar(p.sel()[4]!, gigs);
     await vi.waitFor(() => expect(p.botao(/^Redesignar$/).disabled).toBe(false), { timeout: 2000 });
     return p;
   }
@@ -338,20 +346,20 @@ describe('Controle Individual (entrega 4, envio real)', () => {
 
   it('pede confirmação antes de gravar; Cancelar não grava nada', async () => {
     const p = await prontoParaGravar();
-    p.botao(/^Redesignar$/).click();
+    await p.clicar(p.botao(/^Redesignar$/));
     expect(p.texto()).toContain('Confira o que será gravado no PJe em seu nome:');
     expect(p.texto()).toContain('Redesignar a audiência de 20/10/2026 10:10 (Conciliação em Conhecimento por videoconferência) para 27/10/2026 às 10:12.');
     expect(p.botao(/^Redesignar$/).disabled).toBe(true);
-    p.botao(/^Cancelar$/).click();
+    await p.clicar(p.botao(/^Cancelar$/));
     expect(p.texto()).toContain('Cancelado. Nada foi gravado.');
     expect(escritas).toEqual([]);
   });
 
   it('confirmado: grava na ordem certa e oferece recarregar a página', async () => {
     const p = await prontoParaGravar('s1'); // GIGS "Analisar", 2 dias úteis
-    p.botao(/^Redesignar$/).click();
+    await p.clicar(p.botao(/^Redesignar$/));
     expect(p.texto()).toContain('Lançar GIGS "Analisar" com prazo de 2 dia(s) útil(eis).');
-    p.botao(/Confirmar e gravar no PJe/).click();
+    await p.clicar(p.botao(/Confirmar e gravar no PJe/));
     await vi.waitFor(() => expect(p.texto()).toContain('Audiência redesignada com sucesso.'), { timeout: 2000 });
     expect(escritas.map((e) => `${e.metodo} ${new URL(e.url).pathname}`)).toEqual([
       'PUT /pje-comum-api/api/pautasaudiencias/audiencias/redesignacao',
@@ -366,5 +374,29 @@ describe('Controle Individual (entrega 4, envio real)', () => {
     expect(p.raiz.querySelector('pre')).toBeNull();
     expect(p.texto()).not.toContain('https://pje.trt9.jus.br/pje-comum-api');
     expect(p.botao(/Copiar requisições/).disabled).toBe(false);
+  });
+});
+
+describe('Base Vue (D50a, D50b)', () => {
+  it('o CSS dos componentes vai para o Shadow DOM, uma vez só, mesmo abrindo e fechando o painel', async () => {
+    const c = new ControleIndividual(ambiente, () => {});
+    c.definirProcesso(100);
+    const opcoes = opcoesPadrao(true);
+    c.alternar(opcoes);
+    const raiz = document.getElementById('audaid-v3-individual')!.shadowRoot!;
+    await vi.waitFor(() => expect(raiz.textContent).toContain('Redesignar audiência'));
+    const estilos = () => [...raiz.querySelectorAll('style')].map((s) => s.textContent ?? '');
+    const comGrade = () => estilos().filter((css) => /\.grade\s*\{/.test(css)).length;
+    expect(estilos()[0]).toContain('--cor-marca'); // o CSS base vem primeiro
+    expect(comGrade()).toBe(1);
+    expect(document.head.querySelectorAll('style')).toHaveLength(0); // nada vai para o <head> do PJe
+
+    c.alternar(opcoes); // fecha
+    expect(c.aberto).toBe(false);
+    expect(raiz.querySelector('.painel')).toBeNull();
+
+    c.alternar(opcoes); // abre de novo: painel novo, mesmo CSS
+    await vi.waitFor(() => expect(raiz.textContent).toContain('Redesignar audiência'));
+    expect(comGrade()).toBe(1);
   });
 });

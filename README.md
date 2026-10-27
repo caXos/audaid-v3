@@ -72,13 +72,14 @@ PJe.
 |---|---|
 | `src/pje/` | acesso ao PJe: ambiente e tribunal, sessão (cookies, JWT), requisições, endpoints |
 | `src/regras/` | regras puras e testadas: calendário (bloqueio de datas), pauta do dia, tipos de audiência |
-| `src/individual/` | painel do Controle Individual |
+| `src/componentes/` | base do Vue (montagem no Shadow DOM) e o que o Individual e o Lote compartilham: sala, data, pauta do dia, tipo composto, GIGS, passos da execução |
+| `src/individual/` | painel do Controle Individual (Vue): os `.vue` mostram, e os `.ts` ao lado guardam o estado e as regras |
 | `src/fluxo/` | executor da designação: passos, transporte (real/simulado), trava de escrita |
 | `src/prova/` | painel de diagnóstico (só leitura) |
 | `src/config/` | opções, termos e posição do botão (puro e testado) |
 | `src/ext/` | API de extensão: armazenamento e mensagens |
 | `src/paginas/` | páginas de termos e de opções |
-| `src/ui/` | botão flutuante, ícone e utilidades de interface (sem frameworks; Shadow DOM) |
+| `src/ui/` | botão flutuante, ícone e utilidades de interface (sem Vue; Shadow DOM) |
 | `scripts/` | build e geração dos manifests de cada navegador |
 | `tests/` | testes (Vitest); as fixtures não têm dados pessoais |
 

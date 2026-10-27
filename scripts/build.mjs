@@ -10,6 +10,7 @@ import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { manifestChrome, manifestFirefox, TAMANHOS_ICONE } from './manifest.mjs';
+import { pluginVue } from './vue.mjs';
 
 const raiz = join(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = join(raiz, 'dist');
@@ -32,9 +33,13 @@ for (const { entrada, saida, nome } of ENTRADAS) {
     configFile: false,
     root: raiz,
     logLevel: 'warn',
+    plugins: [pluginVue()],
     define: {
       __AUDAID_DEV__: JSON.stringify(!release),
       __AUDAID_VERSAO__: JSON.stringify(pacote.version),
+      // No modo biblioteca o Vite não troca `process.env.NODE_ENV`, e o navegador não tem `process`.
+      // O Vue vai sempre no modo de produção, para o que você testa ser o que vai para as lojas.
+      'process.env.NODE_ENV': JSON.stringify('production'),
     },
     build: {
       outDir: temp,

@@ -1,6 +1,6 @@
 {
   "name": "audaid-v3",
-  "version": "3.0.1",
+  "version": "3.1.0",
   "private": true,
   "description": "AudAid: assistente para assistentes de audiência dos TRTs que usam o PJe (extensão para Firefox, Chrome e Edge).",
   "type": "module",
@@ -18,10 +18,14 @@
   "devDependencies": {
     "@resvg/resvg-js": "^2.6.2",
     "@types/chrome": "^0.3.6",
+    "@vitejs/plugin-vue": "^6.0.10",
     "happy-dom": "^21.0.4",
     "typescript": "^7.0.2",
     "vite": "^8.3.5",
     "vitest": "^5.0.5",
     "web-ext": "^10.8.0"
+  },
+  "dependencies": {
+    "vue": "^3.5.44"
   }
 }
