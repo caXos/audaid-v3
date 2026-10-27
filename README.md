@@ -19,15 +19,14 @@ Extensão para **Firefox, Chrome e Edge** que ajuda assistentes de audiência do
 
 ## Estado
 
-Em desenvolvimento: **versão 3.0, entrega 4 (envio real)**. A escrita no PJe está liberada, mas o
-**modo simulação vem ligado por padrão** nas versões de desenvolvimento: para gravar de verdade, desligue-o nas
-Opções. No modo real, o painel mostra uma faixa de aviso e pede confirmação, com o resumo do que
-será gravado, antes de cada envio.
+**Versão 3.0.1** (Controle Individual). Nas versões de desenvolvimento, o **modo simulação vem
+ligado por padrão**: para gravar de verdade, desligue-o nas Opções. No modo real, o painel mostra
+uma faixa de aviso e pede confirmação, com o resumo do que será gravado, antes de cada envio.
 
 - **Controle Individual** (o botão do AudAid nas telas de processo): designar ou redesignar com
-  sala, data (bloqueio por calendário), horário (conferência da pauta, "encaixar"), tipo composto,
-  Juízo 100% Digital e GIGS. O resultado mostra cada requisição feita (ou que seria feita, na
-  simulação).
+  sala, data (bloqueio por calendário), horário (conferência da pauta), tipo composto, Juízo 100%
+  Digital e GIGS. O resultado mostra cada passo. Na simulação, mostra também a requisição que
+  seria feita; no envio real, a requisição completa fica em "Copiar requisições".
 - **Termos de uso:** abrem na instalação. Até o aceite, a extensão fica inativa.
 - **Botão do AudAid** com posição e estilo configuráveis. O painel de diagnóstico (só leitura) abre
   pelo link "Diagnóstico" do Controle Individual.

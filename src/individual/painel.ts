@@ -775,7 +775,7 @@ class Formulario {
     if (!this.vivo()) return;
 
     // D44: o hash desta execução é o da prévia; depois do envio, outro para o próximo.
-    this.hashDaExecucao = lancarGigs && /{s*hashs*}/i.test(this.inGigsTexto.value) ? this.hash : null;
+    this.hashDaExecucao = lancarGigs && /\{\s*hash\s*\}/i.test(this.inGigsTexto.value) ? this.hash : null;
     this.hash = gerarHash();
 
     this.executando = true;
@@ -808,7 +808,9 @@ class Formulario {
   }
 
   private desenharPasso(p: RegistroPasso): HTMLElement {
-    const req = p.requisicao;
+    // D52: URL e payload só na simulação. No envio real ficam título, selo, detalhe e erro; o
+    // completo continua em "Copiar requisições", para suporte.
+    const req = this.simulando ? p.requisicao : undefined;
     return h(
       'div',
       { class: 'passo' },

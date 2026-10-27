@@ -276,6 +276,19 @@ describe('Variáveis do GIGS (D43, D44)', () => {
     // Depois do envio, o próximo envio terá outro código.
     expect(p.texto()).not.toContain(`Será lançado: "Por FULANO DE TAL · redesignada · ${hash}`);
   });
+
+  it('"{ hash }" com espaços também mostra o código da execução', async () => {
+    const p = abrir();
+    await vi.waitFor(() => expect(p.texto()).toContain('Redesignar audiência'));
+    p.mudar(p.sel()[4]!, 'outro');
+    p.mudar(p.inp('text'), 'Lote { hash }');
+    p.mudar(p.inp('date'), '2026-10-27');
+    p.mudar(p.inp('time'), '10:12');
+    await vi.waitFor(() => expect(p.botao(/Simular/).disabled).toBe(false), { timeout: 2000 });
+    p.botao(/Simular/).click();
+    await vi.waitFor(() => expect(p.texto()).toContain('Simulação concluída'), { timeout: 2000 });
+    expect(p.texto()).toMatch(/Código desta execução \(para buscar no GIGS\): AUD-[23456789A-Z]{8}/);
+  });
 });
 
 describe('Limite de 4000 caracteres do GIGS no painel', () => {
@@ -345,5 +358,12 @@ describe('Controle Individual (entrega 4, envio real)', () => {
     ]);
     expect(p.texto()).toContain('Recarregar a página para ver a audiência no PJe?');
     expect(p.botao(/Recarregar agora/)).toBeTruthy();
+    // D52: no envio real, os passos aparecem sem URL nem payload.
+    expect(p.texto()).toContain('Redesignar a audiência');
+    expect(p.texto()).toContain('Lançar o GIGS');
+    expect(p.raiz.querySelector('.req')).toBeNull();
+    expect(p.raiz.querySelector('pre')).toBeNull();
+    expect(p.texto()).not.toContain('https://pje.trt9.jus.br/pje-comum-api');
+    expect(p.botao(/Copiar requisições/).disabled).toBe(false);
   });
 });
