@@ -23,28 +23,28 @@ Antes de enviar, confira:
 
 ## 2. Firefox: addons.mozilla.org (AMO)
 
-- [ ] https://addons.mozilla.org/developers/ → **Enviar um novo complemento** → **Neste site** (listado).
-- [ ] Envie `audaid-<versão>-firefox.zip`.
-- [ ] Quando perguntar sobre código-fonte: **Sim**, envie `audaid-<versão>-fonte.zip`.
-- [ ] Descrição, resumo, categoria e links: `docs/lojas/descricao.md`.
-- [ ] Notas para o revisor: o bloco em inglês de `docs/lojas/notas-revisor-amo.md`.
-- [ ] Licença: "Todos os direitos reservados" (D38).
-- [ ] Política de privacidade: https://caxos.github.io/audaid-v3/privacidade.html
+- [x] https://addons.mozilla.org/developers/ → **Enviar um novo complemento** → **Neste site** (listado).
+- [x] Envie `audaid-<versão>-firefox.zip`.
+- [x] Quando perguntar sobre código-fonte: **Sim**, envie `audaid-<versão>-fonte.zip`.
+- [x] Descrição, resumo, categoria e links: `docs/lojas/descricao.md`.
+- [x] Notas para o revisor: o bloco em inglês de `docs/lojas/notas-revisor-amo.md`.
+- [x] Licença: "Todos os direitos reservados" (D38).
+- [x] Política de privacidade: https://caxos.github.io/audaid-v3/privacidade.html
 - [ ] Ícone: `public/icons/audaid.svg`. Capturas de tela: as mesmas da Chrome Web Store.
 
 ## 3. Chrome Web Store
 
-- [ ] https://chrome.google.com/webstore/devconsole → **Novo item** → envie `audaid-<versão>-chrome.zip`.
-- [ ] **Listagem:** descrição e categoria de `docs/lojas/descricao.md`; idioma português (Brasil).
-- [ ] **Imagens (só você pode fazer, no PJe):**
-  - [ ] ícone 128×128: `dist/chrome/icons/audaid-128.png`;
-  - [ ] pelo menos **1 captura de tela 1280×800** (ou 640×400), por exemplo o painel do
+- [x] https://chrome.google.com/webstore/devconsole → **Novo item** → envie `audaid-<versão>-chrome.zip`.
+- [x] **Listagem:** descrição e categoria de `docs/lojas/descricao.md`; idioma português (Brasil).
+- [x] **Imagens (só você pode fazer, no PJe):**
+  - [x] ícone 128×128: `dist/chrome/icons/audaid-128.png`;
+  - [x] pelo menos **1 captura de tela 1280×800** (ou 640×400), por exemplo o painel do
     Controle Individual aberto e o resumo de confirmação. **Esconda nomes de partes e
     números de processo reais**, ou use processos de teste;
-  - [ ] bloco promocional pequeno 440×280 (opcional).
-- [ ] **Práticas de privacidade:** cole os textos de `docs/lojas/justificativas-permissoes.md`.
-- [ ] Visibilidade: **Pública**. Regiões: Brasil (ou todas).
-- [ ] Enviar para revisão.
+  - [x] bloco promocional pequeno 440×280 (opcional).
+- [x] **Práticas de privacidade:** cole os textos de `docs/lojas/justificativas-permissoes.md`.
+- [x] Visibilidade: **Pública**. Regiões: Brasil (ou todas).
+- [x] Enviar para revisão.
 
 ## 4. Depois de publicar
 
