@@ -333,6 +333,7 @@ describe('Controle Individual (entrega 4, envio real)', () => {
     const p = await prontoParaGravar();
     expect(p.texto()).toContain('ENVIO REAL: o que você confirmar será gravado no PJe em seu nome.');
     expect(p.texto()).not.toContain('SIMULAÇÃO:');
+    expect(p.texto()).toContain('O resultado aparece aqui, passo a passo.'); // D52
   });
 
   it('pede confirmação antes de gravar; Cancelar não grava nada', async () => {

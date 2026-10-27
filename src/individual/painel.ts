@@ -323,6 +323,8 @@ class Formulario {
     this.montarOpcoes();
     this.preencherPadroes();
     this.ligarEventos();
+    // D52: no envio real, o resultado mostra os passos, sem as requisições.
+    if (!simulando) this.areaResultado.textContent = 'O resultado aparece aqui, passo a passo.';
     this.elementos = [this.secaoFormulario(), this.secaoResultado()];
     this.atualizar();
   }
