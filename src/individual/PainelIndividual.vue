@@ -46,8 +46,8 @@ const linhaAudiencia = (a: Audiencia) => `${formatarDataHora(a.dataInicio)} · $
       <h1>AudAid · Controle Individual</h1>
       <div class="linha-cab">
         <p>{{ subtitulo }}</p>
-        <button class="link" type="button" @click="aoAbrirLote()">Abrir controle em lote</button>
-        <button class="link" type="button" @click="aoAbrirDiagnostico()">Diagnóstico</button>
+        <button class="acao secundaria pequena" type="button" @click="aoAbrirLote()">Abrir controle em lote</button>
+        <button class="acao secundaria pequena" type="button" @click="aoAbrirDiagnostico()">Diagnóstico</button>
       </div>
       <button class="fechar" type="button" title="Fechar" @click="aoFechar()">×</button>
     </header>
@@ -91,8 +91,8 @@ const linhaAudiencia = (a: Audiencia) => `${formatarDataHora(a.dataInicio)} · $
 
 <style>
 .painel { width: min(580px, 100vw); }
-.cabecalho .linha-cab { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
-.link { background: none; border: 0; padding: 0; color: var(--cor-marca); cursor: pointer; font: inherit; text-decoration: underline; }
+.cabecalho .linha-cab { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.cabecalho .linha-cab p { margin-right: 2px; }
 .faixa-real {
   background: #fff1e0; color: #8a4500; font-weight: 700; font-size: 12px;
   text-align: center; padding: 6px 10px; border-bottom: 2px solid #f0a14a; letter-spacing: .02em;

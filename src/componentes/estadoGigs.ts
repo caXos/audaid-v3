@@ -7,12 +7,24 @@ import { pendenciaGigs, resolverVariaveis, type DadosVariaveisGigs } from '../re
 
 const PRAZO_PADRAO = 2;
 
-export function useGigs(sugestoes: SugestaoGigs[], dadosVariaveis: () => DadosVariaveisGigs) {
+export interface ValoresGigs {
+  opcao: string;
+  texto: string;
+  prazo: number;
+}
+
+/**
+ * `inicial`: valores já escolhidos (o topo lembrado do Lote, o GIGS ajustado de um item). Se a
+ * sugestão mudou nas Opções desde então, o texto guardado vale e a escolha passa a "Outro…".
+ */
+export function useGigs(sugestoes: SugestaoGigs[], dadosVariaveis: () => DadosVariaveisGigs, inicial?: ValoresGigs) {
+  const sugestaoInicial = inicial?.opcao.startsWith('s') ? sugestoes[Number(inicial.opcao.slice(1))] : undefined;
+  const opcaoInicial = !inicial ? '' : inicial.opcao.startsWith('s') && sugestaoInicial?.texto !== inicial.texto ? 'outro' : inicial.opcao;
   /** `''` = não lançar; `s0`, `s1`… = sugestão das Opções; `outro` = texto livre. */
-  const opcao = ref('');
-  const texto = ref('');
+  const opcao = ref(opcaoInicial);
+  const texto = ref(inicial?.texto ?? '');
   /** Como está no campo: o `v-model` de `type="number"` devolve `''` quando o campo está vazio. */
-  const prazo = ref<number | string>(PRAZO_PADRAO);
+  const prazo = ref<number | string>(inicial?.prazo ?? PRAZO_PADRAO);
 
   // Escolher uma sugestão preenche texto e prazo; "Outro" começa vazio.
   watch(

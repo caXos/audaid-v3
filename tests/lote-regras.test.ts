@@ -1,9 +1,8 @@
-// Regras puras da tela 1 do Lote (D12, D27, D48): números, partes, resolução da lista e
-// diagnóstico sem dados pessoais. Todos os números de processo são fictícios (com dígito válido).
+// Regras puras da tela 1 do Lote (D12, D27, D48, D53): números, partes e resolução da lista.
+// Todos os números de processo são fictícios (com dígito válido).
 
 import { describe, expect, it } from 'vitest';
-import { estruturaSemDados } from '../src/componentes/estrutura';
-import { dicaAdvogados, resumoNomes, textoDiagnostico } from '../src/lote/apresentacao';
+import { avisoHorario, dicaAdvogados, resumoGigs, resumoPolo, rotuloRascunho } from '../src/lote/apresentacao';
 import { CONSULTAS_SIMULTANEAS, idDaBusca, resolverLista, type Leitor } from '../src/lote/resolver';
 import type { Resposta } from '../src/pje/http';
 import { extrairNumeros, formatarNumero, numeroValido } from '../src/regras/numeros';
@@ -58,10 +57,11 @@ describe('lerPartes (D48)', () => {
     expect(lerPartes({})).toEqual({ autores: [], reus: [] });
   });
 
-  it('nomes resumidos e advogados no "(?)"', () => {
-    expect(resumoNomes(autores)).toBe('ANA EXEMPLO; BRUNA FICTICIA');
-    expect(resumoNomes([...reus, ...reus], 2)).toBe('EMPRESA MODELO LTDA; OUTRA EMPRESA S.A. e mais 2');
-    expect(resumoNomes([])).toBe('—');
+  it('primeira parte com "(+X)" (D61) e advogados no "(?)"', () => {
+    expect(resumoPolo(autores)).toEqual({ nome: 'ANA EXEMPLO', mais: 1, outros: 'BRUNA FICTICIA' });
+    expect(resumoPolo([...reus, ...reus])).toEqual({ nome: 'EMPRESA MODELO LTDA', mais: 3, outros: 'OUTRA EMPRESA S.A.\nEMPRESA MODELO LTDA\nOUTRA EMPRESA S.A.' });
+    expect(resumoPolo(reus.slice(0, 1))).toEqual({ nome: 'EMPRESA MODELO LTDA', mais: 0, outros: '' });
+    expect(resumoPolo([])).toEqual({ nome: '—', mais: 0, outros: '' });
     expect(dicaAdvogados(autores)).toBe('ANA EXEMPLO: sem advogado\nBRUNA FICTICIA: ZETA ADVOGADO TESTE, ALFA ADVOGADA TESTE');
   });
 });
@@ -123,6 +123,10 @@ describe('resolverLista (D12, D27)', () => {
         return ok<T>(numero === nOutro ? 40 : 10); // como o PJe real: só o id
       }
       if (caminho.endsWith('/partes')) return ok<T>(partes);
+      if (caminho.includes('/audiencias')) {
+        // O 1º processo tem uma audiência designada no órgão logado (seria redesignada).
+        return ok<T>(/id\/10\//.test(caminho) ? [{ id: 444, dataInicio: '2026-10-20T10:10:00', status: 'Designada', salaFisica: { id: 503, nome: 'Sala 01', orgaoJulgador: { id: 174, descricao: 'CEJUSC' } } }] : []);
+      }
       const id = Number(/processos\/id\/(\d+)/.exec(caminho)?.[1]);
       const numero = id === 40 ? nOutro : id === 99 ? '0009999-99.2020.5.09.0001' : nOk;
       // Originário de outra vara, mas tramitando no CEJUSC: `orgaoJulgador` é o atual (captura de 19/10).
@@ -138,6 +142,7 @@ describe('resolverLista (D12, D27)', () => {
     const r = await resolverLista(numeros, { ler: pje.ler, idOrgaoLogado: 174 }, (n) => progresso.push(n));
     expect(r.incluidos.map((p) => [p.numero, p.id])).toEqual([[nOk, 10]]);
     expect(r.incluidos[0]!.partes.autores.map((p) => p.nome)).toEqual(['ANA EXEMPLO', 'BRUNA FICTICIA']);
+    expect(r.incluidos[0]!.antiga?.id).toBe(444);
     expect(r.naoIncluidos).toEqual([
       { numero: nNada, motivo: 'não encontrado no PJe' },
       { numero: nSemAcesso, motivo: 'sem acesso a este processo (HTTP 403)' },
@@ -155,36 +160,21 @@ describe('resolverLista (D12, D27)', () => {
     const pje = pjeFalso(5);
     const muitos = Array.from({ length: 12 }, () => nOk);
     await resolverLista(muitos, { ler: pje.ler, idOrgaoLogado: 174 });
-    // Cada processo faz até 2 leituras simultâneas (processo e partes).
-    expect(pje.maximo()).toBeLessThanOrEqual(CONSULTAS_SIMULTANEAS * 2);
+    // Cada processo faz até 3 leituras simultâneas (processo, partes e audiências).
+    expect(pje.maximo()).toBeLessThanOrEqual(CONSULTAS_SIMULTANEAS * 3);
     expect(pje.maximo()).toBeGreaterThan(1);
-  });
-
-  it('amostras da busca: só a forma, sem valores; erro com a mensagem do PJe', async () => {
-    const r = await resolverLista(numeros, { ler: pjeFalso().ler, idOrgaoLogado: 174 });
-    expect(r.amostrasBusca.map((a) => a.status).sort()).toEqual([200, 403, 404, 500]);
-    expect(r.amostrasBusca.find((a) => a.status === 200)?.estrutura).toBe('number');
-    const texto = JSON.stringify(r.amostrasBusca);
-    for (const n of numeros) expect(texto).not.toContain(n);
-    expect(r.amostrasBusca.find((a) => a.status === 403)?.mensagemErro).toBe('Acesso negado');
-
-    const diag = textoDiagnostico(r, numeros.length, '3.1.0', new Date(2026, 9, 27, 10, 0));
-    expect(diag).toContain('Números reconhecidos: 8 · incluídos: 1 · não incluídos: 7');
-    expect(diag).toContain('- tramita em outro órgão: 1');
-    expect(diag).toContain('- a busca por número devolveu outro processo: 1');
-    for (const n of [...numeros, '0009999-99.2020.5.09.0001']) expect(diag).not.toContain(n);
-    expect(diag).not.toContain('ANA EXEMPLO');
   });
 });
 
-describe('estruturaSemDados', () => {
-  it('chaves, tipos e tamanhos, nunca valores', () => {
-    expect(estruturaSemDados({ id: 1, nome: 'FULANO', lista: [{ a: true }, { a: false }], vazio: [], nada: null })).toEqual({
-      id: 'number',
-      nome: 'string',
-      lista: ['[2]', { a: 'boolean' }],
-      vazio: '[0]',
-      nada: 'null',
-    });
+describe('textos da tela 2', () => {
+  it('aviso de horário, resumo do GIGS e oferta do rascunho', () => {
+    expect(avisoHorario('ok')).toBeNull();
+    expect(avisoHorario('sobreposto')).toContain('com confirmação');
+    expect(avisoHorario('mesmo-minuto')).toContain('o PJe recusaria');
+    expect(resumoGigs(false, 'x', 2)).toBe('Sem GIGS');
+    expect(resumoGigs(true, 'Analisar', 2)).toBe('GIGS: Analisar · 2 d.u.');
+    expect(resumoGigs(true, 'Audiência gerada pelo AudAid em 10/11/2026, às 09h00', 0, 20)).toBe('GIGS: Audiência gerada pe… · sem prazo');
+    expect(rotuloRascunho('2026-10-28T12:30:00.000Z', 9)).toMatch(/^Retomar rascunho de 28\/10\/2026, \d{2}:30 \(9 processos\)$/);
+    expect(rotuloRascunho('x', 1)).toBe('Retomar rascunho (1 processo)');
   });
 });

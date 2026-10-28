@@ -50,6 +50,8 @@ export const CSS = `
 select, input { font: inherit; padding: 4px 6px; border: 1px solid var(--cor-borda); border-radius: 6px; background: #fff; color: var(--cor-texto); }
 button.acao { font: inherit; font-weight: 600; padding: 5px 12px; border-radius: 6px; border: 1px solid var(--cor-marca); background: var(--cor-marca); color: #fff; cursor: pointer; }
 button.acao.secundaria { background: #fff; color: var(--cor-marca); }
+/* D62: ação é botão, nunca link; dentro de linhas e cabeçalhos, o botão pequeno. */
+button.acao.pequena { font-size: 12px; padding: 3px 9px; white-space: nowrap; }
 table { border-collapse: collapse; width: 100%; font-size: 12px; }
 td { padding: 2px 6px; border-bottom: 1px solid #eef1f4; vertical-align: top; }
 td.hora { font-variant-numeric: tabular-nums; width: 52px; }

@@ -39,6 +39,27 @@ export function aoMudarArmazenado(callback: () => void): void {
   });
 }
 
+// ── Chaves avulsas (rascunho e topo do Lote, D18, D56) ─────────────────────────────────────
+
+/** Leitura e gravação de uma chave. Injetado onde é usado, para os testes usarem memória. */
+export interface Armazenamento {
+  ler(chave: string): Promise<unknown>;
+  gravar(chave: string, valor: unknown): Promise<void>;
+  remover(chave: string): Promise<void>;
+}
+
+export const armazenamentoDaExtensao: Armazenamento = {
+  async ler(chave) {
+    return (await ext.storage.local.get(chave))[chave];
+  },
+  async gravar(chave, valor) {
+    await ext.storage.local.set({ [chave]: valor });
+  },
+  async remover(chave) {
+    await ext.storage.local.remove(chave);
+  },
+};
+
 // ── Mensagens content script → background ──────────────────────────────────────────────────
 
 export type Mensagem = { tipo: 'abrir-termos' } | { tipo: 'abrir-opcoes' };
