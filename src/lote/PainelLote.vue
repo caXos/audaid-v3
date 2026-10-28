@@ -1,13 +1,13 @@
 <script setup lang="ts">
 // Controle em Lote (§2.3) num diálogo de tela cheia sobre o PJe (D19): tela 1 (texto), tela 2
-// (pauta) e o resumo provisório, até a tela 3 (entrega 4).
+// (pauta) e tela 3 (conferência). A tela 4 (execução) chega na entrega 5.
 import type { SugestaoGigs } from '../config/opcoes';
 import type { ConjuntoRegras } from '../regras/organizar';
 import type { Armazenamento } from '../ext/api';
 import type { Ambiente } from '../pje/ambiente';
 import { rotuloEtapa } from './apresentacao';
 import { useLote } from './estadoLote';
-import ResumoLote from './ResumoLote.vue';
+import TelaConferencia from './TelaConferencia.vue';
 import TelaPauta from './TelaPauta.vue';
 import TelaTexto from './TelaTexto.vue';
 
@@ -50,7 +50,7 @@ const lote = useLote(props.ambiente, props.versao, props.sugestoesGigs, props.co
           </div>
         </section>
         <TelaPauta v-else-if="lote.tela === 'pauta'" :lote="lote" />
-        <ResumoLote v-else-if="lote.tela === 'resumo'" :lote="lote" />
+        <TelaConferencia v-else-if="lote.tela === 'conferencia'" :lote="lote" />
         <TelaTexto v-else :lote="lote" />
       </div>
     </div>
