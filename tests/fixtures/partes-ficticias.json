@@ -1,0 +1,67 @@
+{
+  "ATIVO": [
+    {
+      "id": 902,
+      "polo": "ativo",
+      "tipo": "AUTOR",
+      "nome": "BRUNA FICTICIA",
+      "situacao": "Ativo",
+      "ordem": 2,
+      "idPessoa": 202,
+      "representantes": [
+        { "id": 9021, "tipo": "ADVOGADO", "nome": "ZETA ADVOGADO TESTE", "situacao": "Ativo", "idPessoa": 10, "numeroOab": "PR000010" },
+        { "id": 9022, "tipo": "ADVOGADO", "nome": "ALFA ADVOGADA TESTE", "situacao": "Ativo", "idPessoa": 11, "numeroOab": "PR000011" },
+        { "id": 9023, "tipo": "ADVOGADO", "nome": "ZETA ADVOGADO TESTE", "situacao": "Ativo", "idPessoa": 10, "numeroOab": "PR000010" }
+      ]
+    },
+    {
+      "id": 901,
+      "polo": "ativo",
+      "tipo": "AUTOR",
+      "nome": "ANA EXEMPLO",
+      "situacao": "Ativo",
+      "ordem": 1,
+      "idPessoa": 201,
+      "representantes": [
+        { "id": 9011, "tipo": "ADVOGADO", "nome": "ADVOGADO DESABILITADO", "situacao": "Inativo", "idPessoa": 12 },
+        { "id": 9012, "tipo": "PROCURADOR", "nome": "PROCURADOR TESTE", "situacao": "Ativo", "idPessoa": 13 }
+      ]
+    }
+  ],
+  "PASSIVO": [
+    {
+      "id": 903,
+      "polo": "passivo",
+      "tipo": "RÉU",
+      "nome": "OUTRA EMPRESA S.A.",
+      "situacao": "Ativo",
+      "ordem": 2,
+      "idPessoa": 204,
+      "representantes": []
+    },
+    {
+      "id": 904,
+      "polo": "passivo",
+      "tipo": "RÉU",
+      "nome": "EMPRESA MODELO LTDA",
+      "situacao": "Ativo",
+      "ordem": 1,
+      "idPessoa": 203,
+      "representantes": [
+        { "id": 9041, "tipo": "ADVOGADO", "nome": "BETA ADVOGADO TESTE", "situacao": "Ativo", "idPessoa": 14, "numeroOab": "SC000014" }
+      ]
+    },
+    {
+      "id": 905,
+      "polo": "passivo",
+      "tipo": "RÉU",
+      "nome": "REU EXCLUIDO DO POLO",
+      "situacao": "Inativo",
+      "ordem": 3,
+      "idPessoa": 205
+    }
+  ],
+  "TERCEIROS": [
+    { "id": 906, "polo": "outros", "tipo": "PERITO", "nome": "PERITO TESTE", "situacao": "Ativo", "ordem": 1, "idPessoa": 206 }
+  ]
+}

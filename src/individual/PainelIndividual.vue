@@ -16,6 +16,7 @@ const props = defineProps<{
   opcoes: Opcoes;
   aoFechar: () => void;
   aoAbrirDiagnostico: () => void;
+  aoAbrirLote: () => void;
 }>();
 
 const simulando = props.opcoes.simulacao || !ESCRITA_LIBERADA;
@@ -45,6 +46,7 @@ const linhaAudiencia = (a: Audiencia) => `${formatarDataHora(a.dataInicio)} · $
       <h1>AudAid · Controle Individual</h1>
       <div class="linha-cab">
         <p>{{ subtitulo }}</p>
+        <button class="link" type="button" @click="aoAbrirLote()">Abrir controle em lote</button>
         <button class="link" type="button" @click="aoAbrirDiagnostico()">Diagnóstico</button>
       </div>
       <button class="fechar" type="button" title="Fechar" @click="aoFechar()">×</button>

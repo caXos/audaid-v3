@@ -1,7 +1,10 @@
-// Endpoints de leitura usados na 3.0 (blueprint §3). Todos relativos à origem do ambiente.
+// Endpoints de leitura (blueprint §3). Todos relativos à origem do ambiente.
 
 export const caminhos = {
   processo: (id: number) => `/pje-comum-api/api/processos/id/${id}`,
+  /** Número CNJ → id interno (tela 1 do Lote). Responde só o id, um número solto (teste de 27/10/2026). */
+  processoPorNumero: (numero: string) => `/pje-comum-api/api/processos?numero=${encodeURIComponent(numero)}`,
+  partes: (id: number) => `/pje-comum-api/api/processos/id/${id}/partes`,
   audiencias: (id: number) => `/pje-comum-api/api/processos/id/${id}/audiencias?status=M`,
   tiposAudiencia: () => `/pje-comum-api/api/dominio/tiposaudiencias`,
   salas: (idOrgao: number) => `/pje-comum-api/api/salasaudiencias?idOrgaoJulgador=${idOrgao}`,
@@ -78,4 +81,34 @@ export interface ItemPauta {
 export interface PautaDia {
   dia: string;
   pautasDoDia: ItemPauta[];
+}
+
+/** Representante de uma parte (advogado, procurador…), como em `processos/id/{id}/partes`. */
+export interface RepresentanteBruto {
+  nome?: string;
+  /** "ADVOGADO", … */
+  tipo?: string;
+  /** "Ativo", … */
+  situacao?: string;
+  idPessoa?: number;
+  numeroOab?: string;
+}
+
+/** Parte do processo, como em `processos/id/{id}/partes` (captura de 19/10/2026). */
+export interface ParteBruta {
+  nome?: string;
+  /** "AUTOR", "RÉU", "PERITO"… */
+  tipo?: string;
+  /** "Ativo", … */
+  situacao?: string;
+  /** Posição no polo, a partir de 1. */
+  ordem?: number;
+  idPessoa?: number;
+  representantes?: RepresentanteBruto[];
+}
+
+export interface RespostaPartes {
+  ATIVO?: ParteBruta[];
+  PASSIVO?: ParteBruta[];
+  TERCEIROS?: ParteBruta[];
 }

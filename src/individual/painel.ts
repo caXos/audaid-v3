@@ -15,6 +15,8 @@ export class ControleIndividual {
   constructor(
     private readonly ambiente: Ambiente,
     private readonly aoAbrirDiagnostico: () => void,
+    /** Link "Abrir controle em lote" (D1). */
+    private readonly aoAbrirLote: () => void,
   ) {
     this.host.id = 'audaid-v3-individual';
     // O CSS base (cores, painel, cartões) é o mesmo do painel de diagnóstico, que continua sem Vue.
@@ -54,6 +56,7 @@ export class ControleIndividual {
       opcoes,
       aoFechar: () => this.fechar(),
       aoAbrirDiagnostico: this.aoAbrirDiagnostico,
+      aoAbrirLote: this.aoAbrirLote,
     });
   }
 }

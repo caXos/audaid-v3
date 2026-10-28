@@ -83,8 +83,10 @@ beforeEach(() => {
 
 afterEach(() => vi.unstubAllGlobals());
 
+const aoAbrirLote = vi.fn();
+
 function abrir(simulacao = true) {
-  const c = new ControleIndividual(ambiente, () => {});
+  const c = new ControleIndividual(ambiente, () => {}, aoAbrirLote);
   c.definirProcesso(100);
   c.alternar({ ...opcoesPadrao(true), simulacao });
   const raiz = document.getElementById('audaid-v3-individual')!.shadowRoot!;
@@ -379,7 +381,7 @@ describe('Controle Individual (entrega 4, envio real)', () => {
 
 describe('Base Vue (D50a, D50b)', () => {
   it('o CSS dos componentes vai para o Shadow DOM, uma vez só, mesmo abrindo e fechando o painel', async () => {
-    const c = new ControleIndividual(ambiente, () => {});
+    const c = new ControleIndividual(ambiente, () => {}, () => {});
     c.definirProcesso(100);
     const opcoes = opcoesPadrao(true);
     c.alternar(opcoes);
@@ -398,5 +400,15 @@ describe('Base Vue (D50a, D50b)', () => {
     c.alternar(opcoes); // abre de novo: painel novo, mesmo CSS
     await vi.waitFor(() => expect(raiz.textContent).toContain('Redesignar audiência'));
     expect(comGrade()).toBe(1);
+  });
+});
+
+describe('Link para o lote (D1)', () => {
+  it('"Abrir controle em lote" chama quem abre o lote', async () => {
+    aoAbrirLote.mockClear();
+    const p = abrir();
+    await vi.waitFor(() => expect(p.texto()).toContain('Redesignar audiência'));
+    await p.clicar(p.botao(/^Abrir controle em lote$/));
+    expect(aoAbrirLote).toHaveBeenCalledTimes(1);
   });
 });

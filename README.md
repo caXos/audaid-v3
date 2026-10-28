@@ -19,7 +19,9 @@ Extensão para **Firefox, Chrome e Edge** que ajuda assistentes de audiência do
 
 ## Estado
 
-**Versão 3.0.1** (Controle Individual). Nas versões de desenvolvimento, o **modo simulação vem
+**Publicada: versão 3.0.1** (Controle Individual). **Em desenvolvimento: 3.1**, com o Controle em
+Lote. Por enquanto, só a tela 1: colar a lista e conferir quem entra, sem gravar nada. Nas
+versões de desenvolvimento, o **modo simulação vem
 ligado por padrão**: para gravar de verdade, desligue-o nas Opções. No modo real, o painel mostra
 uma faixa de aviso e pede confirmação, com o resumo do que será gravado, antes de cada envio.
 
@@ -74,6 +76,7 @@ PJe.
 | `src/regras/` | regras puras e testadas: calendário (bloqueio de datas), pauta do dia, tipos de audiência |
 | `src/componentes/` | base do Vue (montagem no Shadow DOM) e o que o Individual e o Lote compartilham: sala, data, pauta do dia, tipo composto, GIGS, passos da execução |
 | `src/individual/` | painel do Controle Individual (Vue): os `.vue` mostram, e os `.ts` ao lado guardam o estado e as regras |
+| `src/lote/` | Controle em Lote (Vue, 3.1): lista colada, consulta dos processos, "Não incluídos" |
 | `src/fluxo/` | executor da designação: passos, transporte (real/simulado), trava de escrita |
 | `src/prova/` | painel de diagnóstico (só leitura) |
 | `src/config/` | opções, termos e posição do botão (puro e testado) |

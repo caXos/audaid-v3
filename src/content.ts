@@ -3,6 +3,7 @@
 
 import { aoMudarArmazenado, enviarMensagem, lerArmazenado, type Armazenado } from './ext/api';
 import { ControleIndividual } from './individual/painel';
+import { ControleLote } from './lote/ControleLote';
 import { lerAmbiente, lerTela } from './pje/ambiente';
 import { ProvaTecnica } from './prova/painel';
 import { Fab, v1Presente } from './ui/fab';
@@ -11,21 +12,37 @@ const ambiente = lerAmbiente(location.href);
 
 if (ambiente && !document.getElementById('audaid-v3-fab')) {
   const diagnostico = new ProvaTecnica(ambiente);
-  const individual = new ControleIndividual(ambiente, () => {
-    // O link "Diagnóstico" troca o painel do Individual pelo de diagnóstico (só leitura).
-    individual.fechar();
-    diagnostico.alternar();
-  });
+  const lote = new ControleLote(ambiente, __AUDAID_VERSAO__);
+  const individual = new ControleIndividual(
+    ambiente,
+    () => {
+      // O link "Diagnóstico" troca o painel do Individual pelo de diagnóstico (só leitura).
+      individual.fechar();
+      diagnostico.alternar();
+    },
+    () => {
+      // D1: dentro do processo, o lote abre pelo link do Individual.
+      individual.fechar();
+      lote.abrir();
+    },
+  );
   let estado: Armazenado | null = null;
+  let idProcesso: number | null = null;
 
   const fab = new Fab(
     () => {
       if (!estado?.aceite) return;
+      if (lote.aberto) {
+        lote.fechar();
+        return;
+      }
       if (diagnostico.aberto) {
         diagnostico.fechar();
         return;
       }
-      individual.alternar(estado.opcoes);
+      // D1: no processo, o Individual; fora dele, direto o lote.
+      if (idProcesso !== null) individual.alternar(estado.opcoes);
+      else lote.abrir();
     },
     () => void enviarMensagem({ tipo: 'abrir-termos' }),
   );
@@ -36,6 +53,7 @@ if (ambiente && !document.getElementById('audaid-v3-fab')) {
     if (!estado.aceite) {
       individual.fechar();
       diagnostico.fechar();
+      lote.fechar();
     }
   };
 
@@ -44,15 +62,16 @@ if (ambiente && !document.getElementById('audaid-v3-fab')) {
     fab.garantirNaPagina();
     individual.garantirNaPagina();
     diagnostico.garantirNaPagina();
+    lote.garantirNaPagina();
     fab.avisarV1(v1Presente());
     if (location.href === ultimaUrl) return;
     ultimaUrl = location.href;
     const tela = lerTela(location.pathname);
-    const idProcesso = tela.tipo === 'processo' ? tela.idProcesso : null;
+    idProcesso = tela.tipo === 'processo' ? tela.idProcesso : null;
     individual.definirProcesso(idProcesso);
     diagnostico.definirProcesso(idProcesso);
-    // Na 3.0 o FAB só existe nas telas do Controle Individual (§2.2).
-    fab.mostrar(idProcesso !== null);
+    // Desde a 3.1, o FAB aparece em toda página `pjekz/*` (D1). O lote não fecha ao navegar.
+    fab.mostrar(true);
   };
 
   aoMudarArmazenado(() => void aplicarEstado());
