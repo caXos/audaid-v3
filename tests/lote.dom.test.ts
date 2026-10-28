@@ -35,6 +35,9 @@ function jwt(payload: object): string {
 }
 
 const lidos: string[] = [];
+/** Pauta do dia da sala no PJe falso (tela 3); vazia = dia sem audiência nem vaga. */
+let pautaDaSala: object[] = [];
+let consultasPauta = 0;
 
 function responder(url: string): Response {
   const json = (d: unknown) => new Response(JSON.stringify(d), { status: 200 });
@@ -61,6 +64,11 @@ function responder(url: string): Response {
   if (u.pathname.endsWith('/dominio/tiposaudiencias')) return json(tipos);
   if (u.pathname.endsWith('/salasaudiencias')) return json([{ id: 503, nome: 'Sala 01' }, { id: 504, nome: 'Sala 02' }]);
   if (u.pathname.endsWith('/calendarioeventos')) return json(calendario);
+  if (u.pathname.endsWith('/classificacoes/dia')) {
+    consultasPauta++;
+    const dia = u.searchParams.get('data');
+    return json(pautaDaSala.length ? { dia, pautasDoDia: pautaDaSala } : { dia });
+  }
   return new Response('não encontrado', { status: 404 });
 }
 
@@ -76,6 +84,8 @@ function memoria(): Armazenamento & { dados: Map<string, unknown> } {
 
 beforeEach(() => {
   lidos.length = 0;
+  pautaDaSala = [];
+  consultasPauta = 0;
   Object.defineProperty(document, 'cookie', {
     configurable: true,
     get: () => `Xsrf-Token=XYZ; access_token=${jwt({ exp: 4102444800, nome: 'FULANO DE TAL', orgaoJulgador: { id: 174, descricao: 'CEJUSC - JT - CASCAVEL' } })}`,
@@ -216,10 +226,10 @@ describe('Controle em Lote, tela 2 (entrega 2)', () => {
     await p.clicar(p.botao(/^Continuar$/));
     expect(p.texto()).toContain('Há horários sobrepostos');
     await p.clicar(p.botao(/^Continuar mesmo assim$/));
-    expect(p.texto()).toContain('Resumo: 2 audiência(s) em 17/11/2026');
-    expect(p.raiz.querySelector('.cabecalho-lote')!.textContent).toContain('Etapa 3 - Conferência (provisória)');
-    expect(p.texto()).toMatch(/Código do lote: AUD-[23456789A-Z]{8}/);
-    expect(p.texto()).toContain('redesignar (de 20/10/2026 10:10)');
+    expect(p.texto()).toContain('3. Conferência: 2 audiência(s) em 17/11/2026');
+    expect(p.raiz.querySelector('.cabecalho-lote')!.textContent).toContain('Etapa 3 - Conferência');
+    await vi.waitFor(() => expect(p.texto()).toMatch(/Código do lote: AUD-[23456789A-Z]{8}/), { timeout: 2000 });
+    expect(p.texto()).toContain('Já tem audiência designada no órgão: 20/10/2026 10:10');
     expect(p.texto()).toContain('09:05');
     await p.clicar(p.botao(/^Voltar à pauta$/));
     expect(p.texto()).toContain('2. Pauta: 2 processo(s)');
@@ -277,6 +287,82 @@ describe('Controle em Lote, tela 2 (entrega 2)', () => {
     expect(p.linhas()[1]!.querySelector('.resumo-gigs')!.getAttribute('title')).toMatch(/^Lote AUD-[23456789A-Z]{8}: redesignada às 09:10$/);
     expect(p.linhas()[1]!.querySelector('.selo-mini.ajustado')).not.toBeNull();
     expect(p.linhas()[0]!.querySelector('.resumo-gigs')!.textContent).toBe('Sem GIGS');
+  });
+});
+
+describe('Tela 3: conferência com a pauta da sala (D28, D32, D65–D67)', () => {
+  const deFora = (hora: string, id = 999, nr = '0000999-11.2026.5.09.0001') => ({ idProcesso: id, nrProcesso: nr, status: 'M', pautaAudienciaHorario: { horaInicial: `${hora}:00`, horaFinal: `${hora}:00` } });
+  const vaga = (hora: string) => ({ tipo: { id: 3, descricao: 'Conciliação' }, pautaAudienciaHorario: { horaInicial: `${hora}:00`, horaFinal: `${hora}:00` } });
+  const inicioNa3 = (p: Painel, numero: string) =>
+    [...p.raiz.querySelectorAll('tr.linha-conferida')].find((tr) => tr.textContent?.includes(numero))?.querySelectorAll('td')[2]?.textContent;
+
+  async function irParaConferencia(p: Painel) {
+    await irParaPauta(p);
+    await preencherTopo(p);
+    await p.clicar(p.botao(/^Continuar$/));
+    await vi.waitFor(() => expect(p.texto()).toContain('3. Conferência'));
+    await vi.waitFor(() => expect(p.texto()).toContain('Pauta da sala no PJe'), { timeout: 2000 });
+  }
+
+  it('vermelho, amarelo e audiência existente; vaga não conta; "Encaixar" (padrão) resolve e libera o Continuar', async () => {
+    // Lote: N1 às 09:00 (10 min) e N3 às 09:10. N3 já tem audiência no órgão (20/10).
+    pautaDaSala = [vaga('09:00'), deFora('09:10'), deFora('09:05', 777, '0000777-22.2026.5.09.0001')];
+    const p = abrir();
+    await irParaConferencia(p);
+    expect(p.texto()).toContain('Pauta da sala no PJe: 2 audiência(s) de fora do lote e 1 vaga(s)');
+    expect(p.raiz.querySelector('.achado-vermelho')!.textContent).toContain('0000999-11.2026.5.09.0001 já começa às 09:10 nesta sala');
+    expect(p.raiz.querySelector('.achado-amarelo')!.textContent).toContain('0000777-22.2026.5.09.0001 começa às 09:05');
+    expect(p.raiz.querySelector('.achado-existente')!.textContent).toContain('Já tem audiência designada no órgão: 20/10/2026 10:10');
+    expect(p.botao(/^Continuar$/).disabled).toBe(true);
+    expect(p.texto()).toContain('1 conflito(s) vermelho(s) para resolver.');
+
+    await p.clicar(p.botao(/^Aplicar$/, p.raiz.querySelector('.achado-vermelho')!));
+    expect(inicioNa3(p, N3)).toBe('09:11');
+    expect(p.raiz.querySelector('.achado-vermelho')).toBeNull();
+    expect(p.raiz.querySelector('.achado-amarelo')).not.toBeNull(); // amarelo só avisa
+    expect(p.botao(/^Continuar$/).disabled).toBe(false);
+    await p.clicar(p.botao(/^Continuar$/));
+    expect(p.texto()).toContain('Tudo conferido.');
+  });
+
+  it('"Empurrar" (D65) põe um intervalo com a duração base a partir do processo de fora', async () => {
+    pautaDaSala = [deFora('09:10')];
+    const p = abrir();
+    await irParaConferencia(p);
+    await p.mudar(p.raiz.querySelector<HTMLSelectElement>('.achado-vermelho select')!, 'empurrar');
+    await p.clicar(p.botao(/^Aplicar$/, p.raiz.querySelector('.achado-vermelho')!));
+    expect(inicioNa3(p, N3)).toBe('09:20');
+    const intervalo = p.raiz.querySelector('tr.resumo-intervalo')!;
+    expect(intervalo.textContent).toContain('Intervalo');
+    expect(intervalo.textContent).toContain('09:10');
+    expect(p.botao(/^Continuar$/).disabled).toBe(false);
+    // A mudança vale para a pauta (tela 2) também.
+    await p.clicar(p.botao(/^Voltar à pauta$/));
+    expect(p.raiz.querySelectorAll('.linha-intervalo')).toHaveLength(1);
+  });
+
+  it('audiência existente: "Redesignar" é o padrão; "Remover da lista" tira o processo e recalcula', async () => {
+    const p = abrir();
+    await irParaConferencia(p);
+    const aplicarExistente = () => p.botao(/^Aplicar$/, p.raiz.querySelector('.achado-existente')!);
+    expect(aplicarExistente().disabled).toBe(true); // o padrão não muda nada
+    await p.mudar(p.raiz.querySelector<HTMLSelectElement>('.achado-existente select')!, 'remover');
+    await p.clicar(aplicarExistente());
+    expect(p.texto()).toContain('3. Conferência: 1 audiência(s)');
+    expect(p.raiz.querySelector('.achado-existente')).toBeNull();
+  });
+
+  it('"Aplicar o padrão a todos" resolve um vermelho por vez; "Consultar de novo" relê a pauta', async () => {
+    pautaDaSala = [deFora('09:00'), deFora('09:10', 888, '0000888-33.2026.5.09.0001')];
+    const p = abrir();
+    await irParaConferencia(p);
+    expect(p.raiz.querySelectorAll('.achado-vermelho')).toHaveLength(2);
+    await p.clicar(p.botao(/^Aplicar o padrão a todos$/));
+    expect(p.raiz.querySelectorAll('.achado-vermelho')).toHaveLength(0);
+    expect([inicioNa3(p, N1), inicioNa3(p, N3)]).toEqual(['09:01', '09:11']);
+    const antes = consultasPauta;
+    await p.clicar(p.botao(/^Consultar de novo$/));
+    await vi.waitFor(() => expect(consultasPauta).toBe(antes + 1), { timeout: 2000 });
   });
 });
 

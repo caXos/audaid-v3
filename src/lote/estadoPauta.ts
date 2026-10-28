@@ -21,8 +21,10 @@ import {
   LIMITES_LOTE,
   mesclarItens,
   moverItem,
+  empurrarItens,
   novoIntervalo,
   paraHora,
+  removerSemRecalcularItens,
   reordenarItens,
   tipoDoItem,
   type AjustesItem,
@@ -33,6 +35,7 @@ import {
   type TipoDoItem,
   type Topo,
 } from './pauta';
+import type { ItemParaConferir } from './conferencia';
 import type { ProcessoDoLote } from './resolver';
 
 export interface ContextoPauta {
@@ -162,6 +165,13 @@ export function usePauta(ctx: ContextoPauta, inicio: InicioPauta) {
   });
 
   const temSobreposicao = computed(() => linhas.value.some((l) => l.linha.sinal === 'sobreposto'));
+  /** O que a tela 3 confere: cada audiência com o horário calculado (src/lote/conferencia.ts). */
+  const paraConferir = computed<ItemParaConferir[]>(() =>
+    linhas.value
+      .filter((l) => l.linha.tipo === 'processo' && l.processo)
+      .map((l) => ({ chave: l.linha.chave, idProcesso: l.processo!.id, inicio: l.linha.inicio, duracao: l.linha.duracao, antiga: l.processo!.antiga })),
+  );
+  const indiceDe = (chave: string) => itens.value.findIndex((i) => i.chave === chave);
   const quantidade = computed(() => itens.value.filter((i) => i.tipo === 'processo').length);
 
   // ── Ações ──
@@ -240,6 +250,31 @@ export function usePauta(ctx: ContextoPauta, inicio: InicioPauta) {
     conjuntos,
     ordenacao,
     arrastadaAMao,
+    paraConferir,
+    // ── Resoluções da tela 3 (D28, D32, D65, D66) ──
+    /** "Encaixar 1 min depois": o item fica no minuto livre (vira âncora, D55). */
+    encaixar(chave: string, minuto: number) {
+      definirInicio(chave, paraHora(minuto));
+    },
+    /** "Empurrar" (D65): intervalo com a duração base, a partir do horário do processo de fora. */
+    empurrar(chave: string, inicioDoOutro: number) {
+      itens.value = empurrarItens(itens.value, chave, paraHora(inicioDoOutro), topo.duracao);
+    },
+    /** "Remover sem recalcular" (D32): o seguinte fica no horário em que estava. */
+    removerSemRecalcular(chave: string) {
+      const i = indiceDe(chave);
+      const seguinte = linhas.value.find((l) => l.linha.indice === i + 1);
+      itens.value = removerSemRecalcularItens(itens.value, chave, seguinte ? paraHora(seguinte.linha.inicio) : null);
+    },
+    /** Trocar de posição com o vizinho (D16); conta como mover à mão. */
+    subir(chave: string) {
+      const i = indiceDe(chave);
+      if (i > 0) this.mover(i, i - 1);
+    },
+    descer(chave: string) {
+      const i = indiceDe(chave);
+      if (i >= 0 && i < itens.value.length - 1) this.mover(i, i + 1);
+    },
     /** Aplica o conjunto (D48): os processos em cascata; os intervalos manuais no lugar (D48i). */
     aplicarOrdenacao(nome: string) {
       const escolhido = conjuntos.find((c) => c.nome === nome);

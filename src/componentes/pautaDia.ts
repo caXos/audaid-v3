@@ -24,10 +24,13 @@ export function usePautaDia(origem: string) {
     clearTimeout(temporizador);
   });
 
-  /** Consulta a pauta de `idSala` em `data`. A mesma sala e data não são consultadas de novo. */
-  function consultar(idSala: number, data: string) {
+  /**
+   * Consulta a pauta de `idSala` em `data`. A mesma sala e data não são consultadas de novo, a não
+   * ser com `forcar` ("Consultar de novo", na tela 3 do Lote).
+   */
+  function consultar(idSala: number, data: string, forcar = false) {
     const chave = `${idSala}|${data}`;
-    if (chave === estado.value.chave) return;
+    if (chave === estado.value.chave && !forcar) return;
     estado.value = { chave, carregando: true };
     clearTimeout(temporizador);
     temporizador = setTimeout(async () => {

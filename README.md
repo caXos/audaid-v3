@@ -20,9 +20,10 @@ Extensão para **Firefox, Chrome e Edge** que ajuda assistentes de audiência do
 ## Estado
 
 **Publicada: versão 3.0.1** (Controle Individual). **Em desenvolvimento: 3.1**, com o Controle em
-Lote. Por enquanto, as telas 1 e 2: colar a lista, conferir quem entra e montar a pauta (horários,
+Lote. Por enquanto, as telas 1 a 3: colar a lista, conferir quem entra, montar a pauta (horários,
 intervalos, ajustes por processo, GIGS, Auto organizar por conjuntos de regras das Opções), com
-rascunho guardado. Ainda sem gravar nada. Nas
+rascunho guardado) e conferi-la com a pauta da sala no PJe (conflitos e resoluções). Ainda sem
+gravar nada. Nas
 versões de desenvolvimento, o **modo simulação vem
 ligado por padrão**: para gravar de verdade, desligue-o nas Opções. No modo real, o painel mostra
 uma faixa de aviso e pede confirmação, com o resumo do que será gravado, antes de cada envio.

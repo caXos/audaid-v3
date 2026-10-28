@@ -17,7 +17,7 @@ import { usePauta, type EstadoPauta } from './estadoPauta';
 import { chaveRascunho, chaveTopo, lerRascunho, mesclarItens, normalizarTopo, type ItemLote, type Rascunho, type Topo } from './pauta';
 import { resolverLista, type Leitor, type NaoIncluido, type ProcessoDoLote } from './resolver';
 
-export type TelaLote = 'texto' | 'consultando' | 'pauta' | 'resumo';
+export type TelaLote = 'texto' | 'consultando' | 'pauta' | 'conferencia';
 
 /** Espera antes de gravar o rascunho, para não gravar a cada tecla. */
 export const ESPERA_RASCUNHO_MS = 500;
@@ -174,7 +174,7 @@ export function useLote(ambiente: Ambiente, versao: string, sugestoes: SugestaoG
     await armazenamento.remover(chaveRascunho(orgao.id));
   }
 
-  /** Tela 2 → resumo. Com pendência não segue; com sobreposição, pede confirmação (D55). */
+  /** Tela 2 → tela 3. Com pendência não segue; com sobreposição, pede confirmação (D55). */
   function avancar(confirmado = false): void {
     const p = pauta.value;
     if (!p || p.pendencias.length) return;
@@ -183,11 +183,12 @@ export function useLote(ambiente: Ambiente, versao: string, sugestoes: SugestaoG
       return;
     }
     confirmandoSobreposicao.value = false;
-    tela.value = 'resumo';
+    tela.value = 'conferencia';
   }
 
   return reactive({
     versao,
+    origem: ambiente.origem,
     orgao,
     tela,
     texto,

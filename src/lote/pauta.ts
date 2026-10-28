@@ -277,6 +277,42 @@ export function reordenarItens(itens: ItemLote[], ordem: string[]): ItemLote[] {
   return resultado;
 }
 
+/** Tira o início fixo (âncora) de um item, processo ou intervalo. */
+function semAncora(item: ItemLote): ItemLote {
+  if (item.tipo === 'intervalo') {
+    const { inicio: _, ...resto } = item;
+    return resto;
+  }
+  const { inicio: _, ...ajustes } = item.ajustes;
+  return { ...item, ajustes };
+}
+
+/**
+ * "Empurrar" (tela 3, D28, D65): antes do item entra um intervalo manual que começa no horário do
+ * processo de fora (âncora) e dura `duracao` (a duração base do topo); o item perde a âncora e
+ * passa a começar depois dele, e os seguintes vêm atrás.
+ */
+export function empurrarItens(itens: ItemLote[], chave: string, inicioDoOutro: string, duracao: number): ItemLote[] {
+  const i = itens.findIndex((x) => x.chave === chave);
+  if (i < 0) return itens;
+  const intervalo: ItemLote = { ...(novoIntervalo(itens, duracao) as Extract<ItemLote, { tipo: 'intervalo' }>), inicio: inicioDoOutro };
+  return [...itens.slice(0, i), intervalo, semAncora(itens[i]!), ...itens.slice(i + 1)];
+}
+
+/**
+ * "Remover sem recalcular" (tela 3, D32): o item sai, e o seguinte fica no horário em que estava
+ * (vira âncora), para nada depois dele mudar.
+ */
+export function removerSemRecalcularItens(itens: ItemLote[], chave: string, inicioDoSeguinte: string | null): ItemLote[] {
+  const i = itens.findIndex((x) => x.chave === chave);
+  if (i < 0) return itens;
+  const resto = [...itens.slice(0, i), ...itens.slice(i + 1)];
+  const seguinte = resto[i];
+  if (!seguinte || !horaValida(inicioDoSeguinte)) return resto;
+  resto[i] = seguinte.tipo === 'intervalo' ? { ...seguinte, inicio: inicioDoSeguinte } : { ...seguinte, ajustes: { ...seguinte.ajustes, inicio: inicioDoSeguinte } };
+  return resto;
+}
+
 export function novoIntervalo(itens: ItemLote[], duracao: number): ItemLote {
   const usados = new Set(itens.map((i) => i.chave));
   let n = 1;
