@@ -1,7 +1,7 @@
 // Content script: roda em toda página `pjekz/*` dos TRTs (ver scripts/manifest.mjs).
 // O PJe é uma SPA, então a troca de tela não recarrega a página: a URL é observada a cada segundo.
 
-import { aoMudarArmazenado, enviarMensagem, lerArmazenado, type Armazenado } from './ext/api';
+import { aoMudarArmazenado, armazenamentoDaExtensao, enviarMensagem, lerArmazenado, type Armazenado } from './ext/api';
 import { ControleIndividual } from './individual/painel';
 import { ControleLote } from './lote/ControleLote';
 import { lerAmbiente, lerTela } from './pje/ambiente';
@@ -12,7 +12,7 @@ const ambiente = lerAmbiente(location.href);
 
 if (ambiente && !document.getElementById('audaid-v3-fab')) {
   const diagnostico = new ProvaTecnica(ambiente);
-  const lote = new ControleLote(ambiente, __AUDAID_VERSAO__);
+  const lote = new ControleLote(ambiente, __AUDAID_VERSAO__, armazenamentoDaExtensao);
   const individual = new ControleIndividual(
     ambiente,
     () => {
@@ -23,7 +23,7 @@ if (ambiente && !document.getElementById('audaid-v3-fab')) {
     () => {
       // D1: dentro do processo, o lote abre pelo link do Individual.
       individual.fechar();
-      lote.abrir();
+      if (estado?.aceite) lote.abrir(estado.opcoes);
     },
   );
   let estado: Armazenado | null = null;
@@ -42,7 +42,7 @@ if (ambiente && !document.getElementById('audaid-v3-fab')) {
       }
       // D1: no processo, o Individual; fora dele, direto o lote.
       if (idProcesso !== null) individual.alternar(estado.opcoes);
-      else lote.abrir();
+      else lote.abrir(estado.opcoes);
     },
     () => void enviarMensagem({ tipo: 'abrir-termos' }),
   );

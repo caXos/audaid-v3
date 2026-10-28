@@ -1,13 +1,19 @@
-// Textos do Lote, puros e testados: nomes resumidos, dica dos advogados e o diagnóstico.
+// Textos do Lote, puros e testados: nomes resumidos, dica dos advogados, avisos de horário, resumo
+// do GIGS de cada item e a oferta do rascunho.
 
 import type { Parte } from '../regras/partes';
-import type { ResultadoResolucao } from './resolver';
+import type { SinalHorario } from './pauta';
 
-/** "Ana; Bruno e mais 3": a lista inteira fica no tooltip. */
-export function resumoNomes(partes: Parte[], visiveis = 2): string {
-  if (!partes.length) return '—';
-  const nomes = partes.slice(0, visiveis).map((p) => p.nome).join('; ');
-  return partes.length > visiveis ? `${nomes} e mais ${partes.length - visiveis}` : nomes;
+/**
+ * Uma linha por polo (D61): só a primeira parte, e "(+X)" quando houver mais, com os demais nomes
+ * no tooltip. Ex.: GLOBOAVES, DIPLOMATA, DIP FRANGO → "GLOBOAVES" + "(+2)".
+ */
+export function resumoPolo(partes: Parte[]): { nome: string; mais: number; outros: string } {
+  return {
+    nome: partes[0]?.nome ?? '—',
+    mais: Math.max(0, partes.length - 1),
+    outros: partes.slice(1).map((p) => p.nome).join('\n'),
+  };
 }
 
 /** Conteúdo do `(?)`: cada parte com os advogados dela. */
@@ -15,27 +21,45 @@ export function dicaAdvogados(partes: Parte[]): string {
   return partes.map((p) => `${p.nome}: ${p.advogados.map((a) => a.nome).join(', ') || 'sem advogado'}`).join('\n');
 }
 
-/**
- * "Copiar diagnóstico" (entrega 1): contagens, motivos e a forma da busca por número. Sem nomes e
- * sem números de processo, para poder ser enviado ao autor sem expor dado de ninguém.
- */
-export function textoDiagnostico(r: ResultadoResolucao, reconhecidos: number, versao: string, agora: Date = new Date()): string {
-  const motivos = new Map<string, number>();
-  for (const n of r.naoIncluidos) {
-    // "tramita em outro órgão: X" agrupa pelo começo; o nome do órgão não é dado pessoal, mas basta o tipo.
-    const tipo = n.motivo.split(':')[0]!;
-    motivos.set(tipo, (motivos.get(tipo) ?? 0) + 1);
+/** Aviso da linha de cada audiência (D55). `null` = horário sem problema. */
+export function avisoHorario(sinal: SinalHorario): string | null {
+  switch (sinal) {
+    case 'sobreposto':
+      return 'Horário sobreposto a outra audiência do lote: dá para seguir, com confirmação.';
+    case 'mesmo-minuto':
+      return 'Outra audiência do lote começa no mesmo minuto: o PJe recusaria. Mude um dos inícios.';
+    case 'apos-meia-noite':
+      return 'Começa depois da meia-noite: diminua as durações ou adiante o início.';
+    case 'ok':
+      return null;
   }
-  const linhas = [
-    `AudAid ${versao} · Lote, tela 1 · ${agora.toLocaleString('pt-BR')}`,
-    `Números reconhecidos: ${reconhecidos} · incluídos: ${r.incluidos.length} · não incluídos: ${r.naoIncluidos.length}`,
-    ...[...motivos].map(([motivo, n]) => `- ${motivo}: ${n}`),
-    '',
-    'Busca por número (processos?numero=), forma da resposta sem os valores:',
-  ];
-  for (const a of r.amostrasBusca) {
-    linhas.push(`HTTP ${a.status}${a.mensagemErro ? ` · ${a.mensagemErro}` : ''}`);
-    if (a.estrutura !== null) linhas.push(JSON.stringify(a.estrutura, null, 1));
+}
+
+/** "GIGS: Analisar · 2 d.u." no item; o texto completo fica no tooltip. */
+export function resumoGigs(lancar: boolean, texto: string, prazo: number, tamanho = 38): string {
+  if (!lancar) return 'Sem GIGS';
+  const curto = texto.length > tamanho ? `${texto.slice(0, tamanho - 1)}…` : texto;
+  return `GIGS: ${curto || '(sem texto)'} · ${prazo > 0 ? `${prazo} d.u.` : 'sem prazo'}`;
+}
+
+/** "Retomar rascunho de 28/10/2026, 09:30 (9 processos)" (D18). */
+export function rotuloRascunho(salvoEm: string, processos: number): string {
+  const d = new Date(salvoEm);
+  const quando = Number.isNaN(d.getTime())
+    ? ''
+    : ` de ${d.toLocaleDateString('pt-BR')}, ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+  return `Retomar rascunho${quando} (${processos} ${processos === 1 ? 'processo' : 'processos'})`;
+}
+
+/** A etapa no cabeçalho do Lote: as telas do §2.3 (o resumo provisório ocupa o lugar da tela 3). */
+export function rotuloEtapa(tela: 'texto' | 'consultando' | 'pauta' | 'resumo'): string {
+  switch (tela) {
+    case 'texto':
+    case 'consultando':
+      return 'Etapa 1 - Lista de processos';
+    case 'pauta':
+      return 'Etapa 2 - Formulário';
+    case 'resumo':
+      return 'Etapa 3 - Conferência (provisória)';
   }
-  return linhas.join('\n');
 }

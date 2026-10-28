@@ -1,8 +1,7 @@
-// Tela 1 do Lote (D12, D27): de cada número, o processo, as partes e os advogados. O que não
-// resolve vai para "Não incluídos", com o motivo, sem impedir de seguir. Nada é gravado.
+// Tela 1 do Lote (D12, D27): de cada número, o processo, as partes, os advogados e as audiências.
+// O que não resolve vai para "Não incluídos", com o motivo, sem impedir de seguir. Nada é gravado.
 
-import { estruturaSemDados } from '../componentes/estrutura';
-import { caminhos, type Processo, type RespostaPartes } from '../pje/api';
+import { caminhos, type Audiencia, type Processo, type RespostaPartes } from '../pje/api';
 import type { Resposta } from '../pje/http';
 import { numeroValido } from '../regras/numeros';
 import { lerPartes, type PartesDoProcesso } from '../regras/partes';
@@ -17,6 +16,8 @@ export interface ProcessoDoLote {
   /** O GET do processo como veio (o 100% Digital precisa dele inteiro, D31d). */
   processoBruto: Record<string, unknown>;
   partes: PartesDoProcesso;
+  /** Audiência designada no órgão logado, que seria redesignada (D32; a tela 3 decide). */
+  antiga?: Audiencia;
 }
 
 export interface NaoIncluido {
@@ -24,19 +25,9 @@ export interface NaoIncluido {
   motivo: string;
 }
 
-/** Para o diagnóstico: como a busca por número respondeu, sem os valores. */
-export interface AmostraBusca {
-  status: number;
-  estrutura: unknown;
-  /** Mensagem do PJe, quando a busca falhou (texto do sistema, sem dados de parte). */
-  mensagemErro?: string;
-}
-
 export interface ResultadoResolucao {
   incluidos: ProcessoDoLote[];
   naoIncluidos: NaoIncluido[];
-  /** A primeira resposta de cada status da busca por número (a resposta ainda não tem captura). */
-  amostrasBusca: AmostraBusca[];
 }
 
 /** Processos consultados ao mesmo tempo: o bastante para não demorar, sem sobrecarregar o PJe. */
@@ -72,23 +63,18 @@ function motivoDoErro(r: Extract<Resposta<unknown>, { ok: false }>, oQue: string
   return `erro ao consultar ${oQue}: ${r.erro.mensagem}`;
 }
 
-async function resolverUm(numero: string, ler: Leitor, idOrgaoLogado: number, amostras: Map<number, AmostraBusca>): Promise<Desfecho> {
-  // Número com o dígito verificador errado nem vai ao PJe.
+async function resolverUm(numero: string, ler: Leitor, idOrgaoLogado: number): Promise<Desfecho> {
+  // Número com o dígito verificador errado nem vai ao PJe (D53).
   if (!numeroValido(numero)) return { tipo: 'nao-incluido', motivo: 'número inválido (o dígito verificador não confere)' };
   const busca = await ler<unknown>(caminhos.processoPorNumero(numero));
-  if (!amostras.has(busca.status)) {
-    amostras.set(
-      busca.status,
-      busca.ok ? { status: busca.status, estrutura: estruturaSemDados(busca.dados) } : { status: busca.status, estrutura: null, mensagemErro: busca.erro.mensagem },
-    );
-  }
   if (!busca.ok) return { tipo: 'nao-incluido', motivo: motivoDoErro(busca, 'o número') };
   const id = idDaBusca(busca.dados, numero);
   if (id === null) return { tipo: 'nao-incluido', motivo: 'não encontrado no PJe' };
 
-  const [rProc, rPartes] = await Promise.all([
+  const [rProc, rPartes, rAud] = await Promise.all([
     ler<Record<string, unknown>>(caminhos.processo(id)),
     ler<RespostaPartes>(caminhos.partes(id)),
+    ler<Audiencia[]>(caminhos.audiencias(id)),
   ]);
   if (!rProc.ok) return { tipo: 'nao-incluido', motivo: motivoDoErro(rProc, 'o processo') };
   const processo = rProc.dados as unknown as Processo;
@@ -102,9 +88,14 @@ async function resolverUm(numero: string, ler: Leitor, idOrgaoLogado: number, am
     return { tipo: 'nao-incluido', motivo: `tramita em outro órgão: ${orgao?.descricao ?? 'órgão não informado'}` };
   }
   if (!rPartes.ok) return { tipo: 'nao-incluido', motivo: motivoDoErro(rPartes, 'as partes') };
+  if (!rAud.ok) return { tipo: 'nao-incluido', motivo: motivoDoErro(rAud, 'as audiências') };
+  // Como no Individual: a primeira audiência designada do órgão logado é a que seria substituída.
+  const antiga = [...(rAud.dados ?? [])]
+    .sort((a, b) => a.dataInicio.localeCompare(b.dataInicio))
+    .find((a) => a.salaFisica?.orgaoJulgador?.id === idOrgaoLogado && a.status === 'Designada');
   return {
     tipo: 'incluido',
-    processo: { numero, id, processo, processoBruto: rProc.dados, partes: lerPartes(rPartes.dados) },
+    processo: { numero, id, processo, processoBruto: rProc.dados, partes: lerPartes(rPartes.dados), antiga },
   };
 }
 
@@ -118,7 +109,6 @@ export async function resolverLista(
   aoProgredir: (concluidos: number) => void = () => {},
 ): Promise<ResultadoResolucao> {
   const desfechos: Desfecho[] = new Array(numeros.length);
-  const amostras = new Map<number, AmostraBusca>();
   let proximo = 0;
   let concluidos = 0;
 
@@ -127,7 +117,7 @@ export async function resolverLista(
       const i = proximo++;
       const numero = numeros[i]!;
       try {
-        desfechos[i] = await resolverUm(numero, deps.ler, deps.idOrgaoLogado, amostras);
+        desfechos[i] = await resolverUm(numero, deps.ler, deps.idOrgaoLogado);
       } catch (e) {
         desfechos[i] = { tipo: 'nao-incluido', motivo: `erro inesperado: ${e instanceof Error ? e.message : String(e)}` };
       }
@@ -142,9 +132,5 @@ export async function resolverLista(
     if (d.tipo === 'incluido') incluidos.push(d.processo);
     else naoIncluidos.push({ numero: numeros[i]!, motivo: d.motivo });
   });
-  return {
-    incluidos,
-    naoIncluidos,
-    amostrasBusca: [...amostras.values()],
-  };
+  return { incluidos, naoIncluidos };
 }
