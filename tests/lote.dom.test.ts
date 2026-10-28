@@ -123,6 +123,7 @@ describe('Controle em Lote, tela 1', () => {
   it('reconhece os números ao colar; sem número, não dá para continuar; nada é consultado antes', async () => {
     const p = abrir();
     expect(p.texto()).toContain('logado em CEJUSC - JT - CASCAVEL');
+    expect(p.raiz.querySelector('.cabecalho-lote')!.textContent).toContain('Etapa 1 - Lista de processos - nada é gravado nesta etapa');
     expect(p.botao(/^Continuar$/).disabled).toBe(true);
     await p.mudar(p.raiz.querySelector('textarea')!, `Hoje:\n${N1}\n${N3.replace(/\D/g, '')}\n${N1} (repetido)`);
     expect(p.texto()).toContain('2 número(s) reconhecido(s)');
@@ -135,8 +136,11 @@ describe('Controle em Lote, tela 2 (entrega 2)', () => {
   it('lista com partes, "Não incluídos" num diálogo e horários a partir do topo (09:00, 10 min)', async () => {
     const p = abrir();
     await irParaPauta(p);
-    // D60: no alto, só o botão; a lista abre num diálogo.
+    expect(p.raiz.querySelector('.cabecalho-lote')!.textContent).toContain('Etapa 2 - Formulário');
+    // D60: o botão fica na barra da pauta, junto de "Voltar ao texto"; a lista abre num diálogo.
     expect(p.raiz.querySelector('section.nao-incluidos')).toBeNull();
+    const barra = [...p.raiz.querySelectorAll('.cartao-topo')].find((b) => b.textContent?.includes('2. Pauta'))!;
+    expect(p.botao(/^Não incluídos \(2\)$/, barra)).toBeTruthy();
     const dialogo = p.raiz.querySelector('dialog.dialogo-nao-incluidos')!;
     expect(dialogo.hasAttribute('open')).toBe(false);
     await p.clicar(p.botao(/^Não incluídos \(2\)$/));
@@ -207,6 +211,7 @@ describe('Controle em Lote, tela 2 (entrega 2)', () => {
     expect(p.texto()).toContain('Há horários sobrepostos');
     await p.clicar(p.botao(/^Continuar mesmo assim$/));
     expect(p.texto()).toContain('Resumo: 2 audiência(s) em 17/11/2026');
+    expect(p.raiz.querySelector('.cabecalho-lote')!.textContent).toContain('Etapa 3 - Conferência (provisória)');
     expect(p.texto()).toMatch(/Código do lote: AUD-[23456789A-Z]{8}/);
     expect(p.texto()).toContain('redesignar (de 20/10/2026 10:10)');
     expect(p.texto()).toContain('09:05');

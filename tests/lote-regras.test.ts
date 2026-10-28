@@ -2,7 +2,7 @@
 // Todos os números de processo são fictícios (com dígito válido).
 
 import { describe, expect, it } from 'vitest';
-import { avisoHorario, dicaAdvogados, resumoGigs, resumoPolo, rotuloRascunho } from '../src/lote/apresentacao';
+import { avisoHorario, dicaAdvogados, resumoGigs, resumoPolo, rotuloEtapa, rotuloRascunho } from '../src/lote/apresentacao';
 import { CONSULTAS_SIMULTANEAS, idDaBusca, resolverLista, type Leitor } from '../src/lote/resolver';
 import type { Resposta } from '../src/pje/http';
 import { extrairNumeros, formatarNumero, numeroValido } from '../src/regras/numeros';
@@ -176,5 +176,11 @@ describe('textos da tela 2', () => {
     expect(resumoGigs(true, 'Audiência gerada pelo AudAid em 10/11/2026, às 09h00', 0, 20)).toBe('GIGS: Audiência gerada pe… · sem prazo');
     expect(rotuloRascunho('2026-10-28T12:30:00.000Z', 9)).toMatch(/^Retomar rascunho de 28\/10\/2026, \d{2}:30 \(9 processos\)$/);
     expect(rotuloRascunho('x', 1)).toBe('Retomar rascunho (1 processo)');
+    expect([rotuloEtapa('texto'), rotuloEtapa('consultando'), rotuloEtapa('pauta'), rotuloEtapa('resumo')]).toEqual([
+      'Etapa 1 - Lista de processos',
+      'Etapa 1 - Lista de processos',
+      'Etapa 2 - Formulário',
+      'Etapa 3 - Conferência (provisória)',
+    ]);
   });
 });

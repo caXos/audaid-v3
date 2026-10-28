@@ -31,11 +31,7 @@ async function moverTeclado(indice: number, passo: number) {
 
 <template>
   <template v-if="lote.pauta">
-    <!-- D60: só o aviso no alto; a lista, com os motivos, abre num diálogo. -->
-    <div v-if="lote.naoIncluidos.length" class="barra-nao-incluidos">
-      <button class="acao secundaria pequena aviso" type="button" @click="dialogoNaoIncluidos?.abrir()">Não incluídos ({{ lote.naoIncluidos.length }})</button>
-      <span class="suave">ficaram fora da pauta; clique para ver quais e por quê</span>
-    </div>
+    <!-- D60: a lista dos não incluídos, com os motivos, abre num diálogo (o botão fica na barra da pauta). -->
     <Dialogo
       v-if="lote.naoIncluidos.length"
       ref="dialogoNaoIncluidos"
@@ -53,6 +49,16 @@ async function moverTeclado(indice: number, passo: number) {
     <section class="cartao">
       <div class="cartao-topo">
         <h2>2. Pauta: {{ lote.pauta.quantidade }} processo(s)</h2>
+        <!-- D60: junto da contagem e do "Voltar ao texto", que é como se resolve; não gasta linha. -->
+        <button
+          v-if="lote.naoIncluidos.length"
+          class="acao secundaria aviso"
+          type="button"
+          title="Ficaram fora da pauta: clique para ver quais e por quê"
+          @click="dialogoNaoIncluidos?.abrir()"
+        >
+          Não incluídos ({{ lote.naoIncluidos.length }})
+        </button>
         <button class="acao secundaria" type="button" @click="lote.pauta.adicionarIntervalo()">Adicionar intervalo</button>
         <button class="acao secundaria" type="button" @click="lote.voltarAoTexto()">Voltar ao texto</button>
       </div>
@@ -85,7 +91,6 @@ async function moverTeclado(indice: number, passo: number) {
 </template>
 
 <style>
-.barra-nao-incluidos { display: flex; gap: 8px; align-items: center; margin: 0 0 8px 2px; font-size: 12px; }
 .lista-nao-incluidos { max-height: 340px; overflow: auto; margin: 0; padding-left: 18px; border: 1px solid #eef1f4; border-radius: 6px; padding-top: 6px; padding-bottom: 6px; }
 .lista-nao-incluidos li { margin: 2px 0; }
 .lista-pauta { display: flex; flex-direction: column; gap: 0; padding: 0; }

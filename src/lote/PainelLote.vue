@@ -4,6 +4,7 @@
 import type { SugestaoGigs } from '../config/opcoes';
 import type { Armazenamento } from '../ext/api';
 import type { Ambiente } from '../pje/ambiente';
+import { rotuloEtapa } from './apresentacao';
 import { useLote } from './estadoLote';
 import ResumoLote from './ResumoLote.vue';
 import TelaPauta from './TelaPauta.vue';
@@ -23,9 +24,15 @@ const lote = useLote(props.ambiente, props.versao, props.sugestoesGigs, props.ar
 <template>
   <div class="lote-fundo">
     <div class="lote-janela" role="dialog" aria-label="AudAid, Controle em Lote">
-      <header class="cabecalho">
+      <!-- Tudo numa linha só: título | órgão | etapa. -->
+      <header class="cabecalho cabecalho-lote">
         <h1>AudAid · Controle em Lote</h1>
-        <p>{{ lote.orgao ? `logado em ${lote.orgao.descricao} · nada é gravado nesta etapa` : '' }}</p>
+        <template v-if="lote.orgao">
+          <span class="separador">|</span>
+          <span>logado em {{ lote.orgao.descricao }}</span>
+          <span class="separador">|</span>
+          <span>{{ rotuloEtapa(lote.tela) }} - nada é gravado nesta etapa</span>
+        </template>
         <button class="fechar" type="button" title="Fechar (o rascunho fica guardado)" @click="aoFechar()">×</button>
       </header>
       <div class="corpo">
@@ -48,6 +55,9 @@ const lote = useLote(props.ambiente, props.versao, props.sugestoesGigs, props.ar
 </template>
 
 <style>
+.cabecalho-lote { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; padding-right: 44px; color: var(--cor-suave); }
+.cabecalho-lote h1 { margin: 0; color: var(--cor-texto); }
+.cabecalho-lote .separador { color: var(--cor-borda); }
 .lote-fundo { position: fixed; inset: 0; z-index: 2147483647; background: rgba(20, 28, 38, .45); }
 .lote-janela {
   position: absolute; inset: 16px; margin: 0 auto; max-width: 1440px;

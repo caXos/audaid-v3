@@ -50,3 +50,16 @@ export function rotuloRascunho(salvoEm: string, processos: number): string {
     : ` de ${d.toLocaleDateString('pt-BR')}, ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
   return `Retomar rascunho${quando} (${processos} ${processos === 1 ? 'processo' : 'processos'})`;
 }
+
+/** A etapa no cabeçalho do Lote: as telas do §2.3 (o resumo provisório ocupa o lugar da tela 3). */
+export function rotuloEtapa(tela: 'texto' | 'consultando' | 'pauta' | 'resumo'): string {
+  switch (tela) {
+    case 'texto':
+    case 'consultando':
+      return 'Etapa 1 - Lista de processos';
+    case 'pauta':
+      return 'Etapa 2 - Formulário';
+    case 'resumo':
+      return 'Etapa 3 - Conferência (provisória)';
+  }
+}
