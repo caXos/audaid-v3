@@ -2,6 +2,7 @@
 // Controle em Lote (§2.3) num diálogo de tela cheia sobre o PJe (D19): tela 1 (texto), tela 2
 // (pauta) e o resumo provisório, até a tela 3 (entrega 4).
 import type { SugestaoGigs } from '../config/opcoes';
+import type { ConjuntoRegras } from '../regras/organizar';
 import type { Armazenamento } from '../ext/api';
 import type { Ambiente } from '../pje/ambiente';
 import { rotuloEtapa } from './apresentacao';
@@ -14,11 +15,13 @@ const props = defineProps<{
   ambiente: Ambiente;
   versao: string;
   sugestoesGigs: SugestaoGigs[];
+  /** Conjuntos do Auto organizar (D48). */
+  conjuntos: ConjuntoRegras[];
   armazenamento: Armazenamento;
   aoFechar: () => void;
 }>();
 
-const lote = useLote(props.ambiente, props.versao, props.sugestoesGigs, props.armazenamento);
+const lote = useLote(props.ambiente, props.versao, props.sugestoesGigs, props.conjuntos, props.armazenamento);
 </script>
 
 <template>

@@ -10,7 +10,7 @@ Paste the block below into the "Notes to Reviewer" field when submitting a versi
 
 **Testing.** PJe requires a court employee account (digital certificate or government credentials), so the extension cannot be exercised without one. Every write action (schedule/reschedule a hearing, create a GIGS task, toggle "Juízo 100% Digital" for a Julgamento hearing) is preceded by a confirmation dialog listing exactly what will be sent, and a **simulation mode** shows the requests without sending them.
 
-**Third-party code.** Since version 3.1 the panels use **Vue 3.5** (npm package `vue`, runtime-only build, bundled unminified into `content.js`). Templates are precompiled at build time, so there is no `eval` or `new Function`. The one `innerHTML` warning in `content.js` comes from Vue's runtime (`insertStaticContent`), which Vue uses only for static HTML from our own precompiled templates. The extension never uses `v-html`, and all data from PJe is rendered as text.
+**Third-party code.** Since version 3.1 the panels and the options page use **Vue 3.5** (npm package `vue`, runtime-only build, bundled unminified into `content.js` and `opcoes.js`). Templates are precompiled at build time, so there is no `eval` or `new Function`. The `innerHTML` warning in `content.js` and in `opcoes.js` comes from Vue's runtime (`insertStaticContent`), which Vue uses only for static HTML from our own precompiled templates. The extension never uses `v-html`, and all data from PJe is rendered as text.
 
 **Source code and build.** The package is built from TypeScript with Vite. The output is **not minified** on purpose, so it stays readable. To reproduce the submitted package from the attached source:
 

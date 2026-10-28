@@ -1,6 +1,8 @@
 // Opções da extensão (blueprint §2.6) e o aceite dos termos (D22). Tudo puro: o armazenamento
 // fica em src/ext/armazenamento.ts.
 
+import { CONJUNTOS_PADRAO, normalizarCriterios, type ConjuntoRegras } from '../regras/organizar';
+
 export const POSICOES_FAB = [
   'topo-esquerda',
   'topo-centro',
@@ -43,6 +45,8 @@ export interface Opcoes {
   fab: { posicao: PosicaoFab; estilo: EstiloFab };
   /** Sugestões editáveis. A opção vazia (não lançar) e "Outro" são fixas e não ficam aqui. */
   gigs: { sugestoes: SugestaoGigs[] };
+  /** Conjuntos de regras do Auto organizar do Lote (D48, §2.6). O nome de cada um é automático. */
+  organizar: { conjuntos: ConjuntoRegras[] };
   /** Modo simulação (D39): mostra as requisições de escrita sem enviar. */
   simulacao: boolean;
 }
@@ -75,6 +79,8 @@ export function opcoesPadrao(desenvolvimento: boolean): Opcoes {
         { texto: 'Audiência gerada pelo AudAid em {data e hora}', prazo: 2 },
       ],
     },
+    // Pré-cadastro (D48e, D64).
+    organizar: { conjuntos: CONJUNTOS_PADRAO.map((c) => ({ criterios: c.criterios.map((k) => ({ ...k })) })) },
     simulacao: desenvolvimento,
   };
 }
@@ -106,6 +112,7 @@ export function normalizarOpcoes(bruto: unknown, desenvolvimento: boolean): Opco
   const fundo = objeto(est['fundo']);
   const borda = objeto(est['borda']);
   const gigs = objeto(o['gigs']);
+  const organizar = objeto(o['organizar']);
 
   const posicao = POSICOES_FAB.includes(fab['posicao'] as PosicaoFab) ? (fab['posicao'] as PosicaoFab) : p.fab.posicao;
 
@@ -118,6 +125,12 @@ export function normalizarOpcoes(bruto: unknown, desenvolvimento: boolean): Opco
           prazo: inteiro(s['prazo'], 2, LIMITES.prazo.min, LIMITES.prazo.max),
         }))
     : p.gigs.sugestoes;
+
+  // Sem nada salvo, o pré-cadastro; lista salva (mesmo vazia) é respeitada. Critério que não teria
+  // efeito sai, e conjunto que fica sem critério também.
+  const conjuntos = Array.isArray(organizar['conjuntos'])
+    ? (organizar['conjuntos'] as unknown[]).map((c) => ({ criterios: normalizarCriterios(objeto(c)['criterios']) })).filter((c) => c.criterios.length > 0)
+    : p.organizar.conjuntos;
 
   return {
     fab: {
@@ -134,6 +147,7 @@ export function normalizarOpcoes(bruto: unknown, desenvolvimento: boolean): Opco
       },
     },
     gigs: { sugestoes },
+    organizar: { conjuntos },
     simulacao: booleano(o['simulacao'], p.simulacao),
   };
 }

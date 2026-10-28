@@ -10,6 +10,7 @@ import { ControleLote } from '../src/lote/ControleLote';
 import { lerAmbiente } from '../src/pje/ambiente';
 import { DESCRICOES_CONHECIDAS } from '../src/regras/tipos';
 import calendario from './fixtures/calendario-cejusc.json';
+import { CONJUNTOS_PADRAO, nomeDoConjunto } from '../src/regras/organizar';
 import partes from './fixtures/partes-ficticias.json';
 
 const ambiente = lerAmbiente('https://pje.trt9.jus.br/pjekz/painel/global/todos/lista-processos')!;
@@ -20,6 +21,10 @@ const N3 = '0000102-37.2026.5.09.0001';
 const INVALIDO = '0000101-00.2026.5.09.0001';
 const DIA = '2026-11-17';
 const tipos = DESCRICOES_CONHECIDAS.map((descricao, i) => ({ id: i + 1, descricao }));
+const partes3 = {
+  ...partes,
+  PASSIVO: [{ id: 990, polo: 'passivo', tipo: 'RÉU', nome: 'ALFA COMERCIO LTDA', situacao: 'Ativo', ordem: 1, idPessoa: 290, representantes: [] }],
+};
 
 function jwt(payload: object): string {
   const b64 = btoa(String.fromCharCode(...new TextEncoder().encode(JSON.stringify(payload))))
@@ -43,7 +48,8 @@ function responder(url: string): Response {
   const m = /\/processos\/id\/(\d+)(\/\w+)?$/.exec(u.pathname);
   if (m) {
     const id = Number(m[1]);
-    if (m[2] === '/partes') return json(partes);
+    // O processo 3 tem outra reclamada, para a ordenação por nome ter efeito.
+    if (m[2] === '/partes') return json(id === 3 ? partes3 : partes);
     if (m[2] === '/audiencias') {
       return json(id === 3 ? [{ id: 777, dataInicio: '2026-10-20T10:10:00', status: 'Designada', tipo: { id: 3, descricao: 'Conciliação em Conhecimento' }, salaFisica: { id: 503, nome: 'Sala 01', orgaoJulgador: { id: 174, descricao: 'CEJUSC' } } }] : []);
     }
@@ -271,6 +277,70 @@ describe('Controle em Lote, tela 2 (entrega 2)', () => {
     expect(p.linhas()[1]!.querySelector('.resumo-gigs')!.getAttribute('title')).toMatch(/^Lote AUD-[23456789A-Z]{8}: redesignada às 09:10$/);
     expect(p.linhas()[1]!.querySelector('.selo-mini.ajustado')).not.toBeNull();
     expect(p.linhas()[0]!.querySelector('.resumo-gigs')!.textContent).toBe('Sem GIGS');
+  });
+});
+
+describe('Auto organizar na tela 2 (D48, D63)', () => {
+  const POR_NOME = '1. Nome da reclamada (A→Z)';
+  const DIGITAL_PRIMEIRO = '1. Juízo 100% Digital (Sim primeiro) · 2. Nome da reclamada (A→Z)';
+  const ordenar = (p: Painel) => p.raiz.querySelector<HTMLSelectElement>('label.ordenar select')!;
+  const numeros = (p: Painel) => p.linhas().map((l) => l.querySelector('.numero')!.textContent);
+
+  it('na barra da pauta, com "Ordem manual" e o pré-cadastro; aplicar reordena e leva os ajustes', async () => {
+    const p = abrir();
+    await irParaPauta(p);
+    const barra = [...p.raiz.querySelectorAll('.cartao-topo')].find((b) => b.textContent?.includes('2. Pauta'))!;
+    expect(barra.querySelector('label.ordenar select')).not.toBeNull();
+    expect([...ordenar(p).options].map((o) => o.textContent)).toEqual(['Ordem manual', ...CONJUNTOS_PADRAO.map(nomeDoConjunto)]);
+    expect(numeros(p)).toEqual([N1, N3]);
+    await p.mudar(p.linhas()[0]!.querySelector<HTMLInputElement>('input[type="number"]')!, '25'); // ajuste no N1
+    await p.mudar(ordenar(p), POR_NOME); // ALFA (N3) antes de EMPRESA MODELO (N1)
+    expect(numeros(p)).toEqual([N3, N1]);
+    expect(p.linhas()[1]!.querySelector<HTMLInputElement>('input[type="number"]')!.value).toBe('25'); // o ajuste foi junto (D48d)
+    expect(ordenar(p).value).toBe(POR_NOME);
+    await p.mudar(ordenar(p), DIGITAL_PRIMEIRO); // N1 é 100% Digital
+    expect(numeros(p)).toEqual([N1, N3]);
+  });
+
+  it('mover à mão volta para "Ordem manual"; outro conjunto, então, pede confirmação', async () => {
+    const p = abrir();
+    await irParaPauta(p);
+    await p.mudar(ordenar(p), POR_NOME);
+    expect(numeros(p)).toEqual([N3, N1]);
+    const alca = p.linhas()[0]!.querySelector<HTMLElement>('.alca')!;
+    alca.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    await nextTick();
+    await nextTick();
+    expect(numeros(p)).toEqual([N1, N3]);
+    expect(ordenar(p).value).toBe('');
+
+    await p.mudar(ordenar(p), POR_NOME);
+    const dialogo = p.raiz.querySelector('dialog.dialogo-ordenar')!;
+    expect(dialogo.hasAttribute('open')).toBe(true);
+    expect(dialogo.textContent).toContain(POR_NOME);
+    expect(ordenar(p).value).toBe(''); // até a resposta, fica o valor anterior
+    await p.clicar(p.botao(/^Manter a minha ordem$/, dialogo));
+    expect(numeros(p)).toEqual([N1, N3]);
+
+    await p.mudar(ordenar(p), POR_NOME);
+    await p.clicar(p.botao(/^Reordenar$/, dialogo));
+    expect(numeros(p)).toEqual([N3, N1]);
+    expect(ordenar(p).value).toBe(POR_NOME);
+  });
+
+  it('o rascunho guarda a ordenação, e ela volta ao retomar (D18)', async () => {
+    const mem = memoria();
+    const p = abrir(mem);
+    await irParaPauta(p);
+    await p.mudar(ordenar(p), DIGITAL_PRIMEIRO);
+    await vi.waitFor(() => expect(JSON.stringify(mem.dados.get('lote.rascunho.174') ?? {})).toContain('"ordenacao":"1. Juízo 100% Digital'), { timeout: 2000 });
+    p.lote.fechar();
+    p.lote.abrir(opcoesPadrao(true));
+    await vi.waitFor(() => expect(p.texto()).toContain('Retomar rascunho'));
+    await p.clicar(p.botao(/^Retomar rascunho/));
+    await vi.waitFor(() => expect(p.texto()).toContain('2. Pauta: 2 processo(s)'));
+    expect(ordenar(p).value).toBe(DIGITAL_PRIMEIRO);
+    expect(numeros(p)).toEqual([N1, N3]);
   });
 });
 

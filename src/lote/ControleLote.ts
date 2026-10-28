@@ -42,6 +42,7 @@ export class ControleLote {
       ambiente: this.ambiente,
       versao: this.versao,
       sugestoesGigs: opcoes.gigs.sugestoes,
+      conjuntos: opcoes.organizar.conjuntos,
       armazenamento: this.armazenamento,
       aoFechar: () => this.fechar(),
     });

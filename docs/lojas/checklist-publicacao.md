@@ -18,7 +18,7 @@ em `pacotes/`:
 | `audaid-<versão>-chrome.zip` | Chrome Web Store (e Edge Add-ons, se for publicar lá) |
 
 Antes de enviar, confira:
-- [ ] `npx web-ext lint --source-dir dist/firefox` sem **erros**. Os 3 avisos são esperados: 2 sobre `data_collection_permissions` e, desde a 3.1, 1 de `innerHTML` no `content.js`, que vem do runtime do Vue e está explicado nas notas para o revisor da AMO;
+- [ ] `npx web-ext lint --source-dir dist/firefox` sem **erros**. Os 4 avisos são esperados: 2 sobre `data_collection_permissions` e, desde a 3.1, 1 de `innerHTML` no `content.js` e 1 no `opcoes.js`, que vêm do runtime do Vue e estão explicados nas notas para o revisor da AMO;
 - [ ] carregue `dist/firefox` e `dist/chrome` uma vez e confira: termos abrem, botão aparece, Opções **sem** simulação ligada.
 
 ## 2. Firefox: addons.mozilla.org (AMO)
