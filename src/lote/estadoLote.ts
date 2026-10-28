@@ -4,6 +4,7 @@
 
 import { computed, effectScope, onBeforeUnmount, reactive, ref, shallowRef, watch } from 'vue';
 import type { SugestaoGigs } from '../config/opcoes';
+import type { ConjuntoRegras } from '../regras/organizar';
 import type { Armazenamento } from '../ext/api';
 import type { Ambiente } from '../pje/ambiente';
 import { caminhos, type EventoCalendario, type Sala, type TipoAudiencia } from '../pje/api';
@@ -27,7 +28,7 @@ interface DadosDoOrgao {
   eventos: EventoCalendario[];
 }
 
-export function useLote(ambiente: Ambiente, versao: string, sugestoes: SugestaoGigs[], armazenamento: Armazenamento) {
+export function useLote(ambiente: Ambiente, versao: string, sugestoes: SugestaoGigs[], conjuntos: ConjuntoRegras[], armazenamento: Armazenamento) {
   // D5: o órgão é o logado ao abrir o lote, e é relido na hora de consultar.
   const sessao = lerSessao(document.cookie);
   const orgao: OrgaoLogado | null = sessao.orgaoLogado ?? null;
@@ -124,7 +125,7 @@ export function useLote(ambiente: Ambiente, versao: string, sugestoes: SugestaoG
     } else {
       const itens: ItemLote[] = mesclarItens(base?.itens ?? [], incluidos);
       const topo = base?.topo ?? { ...(topoLembrado ?? normalizarTopo(undefined)), data: '' };
-      pauta.value = escopo.run(() => criarPauta(orgao, d, { topo, itens, hash: base?.hash ?? gerarHash() })) ?? null;
+      pauta.value = escopo.run(() => criarPauta(orgao, d, { topo, itens, hash: base?.hash ?? gerarHash(), ordenacao: base?.ordenacao })) ?? null;
     }
     rascunho.value = null;
     tela.value = 'pauta';
@@ -132,7 +133,7 @@ export function useLote(ambiente: Ambiente, versao: string, sugestoes: SugestaoG
 
   function criarPauta(o: OrgaoLogado, d: DadosDoOrgao, inicio: Parameters<typeof usePauta>[1]): EstadoPauta {
     const p = usePauta(
-      { descricaoOrgao: o.descricao, nomeUsuario: sessao.nomeUsuario, tipos: d.tipos, salas: d.salas, eventos: d.eventos, sugestoes, processos: () => processos.value },
+      { descricaoOrgao: o.descricao, nomeUsuario: sessao.nomeUsuario, tipos: d.tipos, salas: d.salas, eventos: d.eventos, sugestoes, conjuntos, processos: () => processos.value },
       inicio,
     );
     // D18 e D56: grava o rascunho e o topo a cada mudança, depois de uma pequena espera.
@@ -142,8 +143,8 @@ export function useLote(ambiente: Ambiente, versao: string, sugestoes: SugestaoG
       () => {
         clearTimeout(temporizador);
         temporizador = setTimeout(() => {
-          const { hash, topo, itens } = p.paraRascunho();
-          const r: Rascunho = { versao: 1, idOrgao: o.id, salvoEm: new Date().toISOString(), hash, topo, itens };
+          const { hash, topo, itens, ordenacao } = p.paraRascunho();
+          const r: Rascunho = { versao: 1, idOrgao: o.id, salvoEm: new Date().toISOString(), hash, topo, itens, ...(ordenacao ? { ordenacao } : {}) };
           void armazenamento.gravar(chaveRascunho(o.id), JSON.parse(JSON.stringify(r)));
           // O dia nunca é lembrado (D56).
           void armazenamento.gravar(chaveTopo(o.id), JSON.parse(JSON.stringify({ ...topo, data: '' })));

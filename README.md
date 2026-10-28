@@ -21,7 +21,8 @@ Extensão para **Firefox, Chrome e Edge** que ajuda assistentes de audiência do
 
 **Publicada: versão 3.0.1** (Controle Individual). **Em desenvolvimento: 3.1**, com o Controle em
 Lote. Por enquanto, as telas 1 e 2: colar a lista, conferir quem entra e montar a pauta (horários,
-intervalos, ajustes por processo, GIGS), com rascunho guardado. Ainda sem gravar nada. Nas
+intervalos, ajustes por processo, GIGS, Auto organizar por conjuntos de regras das Opções), com
+rascunho guardado. Ainda sem gravar nada. Nas
 versões de desenvolvimento, o **modo simulação vem
 ligado por padrão**: para gravar de verdade, desligue-o nas Opções. No modo real, o painel mostra
 uma faixa de aviso e pede confirmação, com o resumo do que será gravado, antes de cada envio.
@@ -74,7 +75,7 @@ PJe.
 | Pasta | Conteúdo |
 |---|---|
 | `src/pje/` | acesso ao PJe: ambiente e tribunal, sessão (cookies, JWT), requisições, endpoints |
-| `src/regras/` | regras puras e testadas: calendário (bloqueio de datas), pauta do dia, tipos de audiência |
+| `src/regras/` | regras puras e testadas: calendário (bloqueio de datas), pauta do dia, tipos de audiência, números e partes, ordenação do Auto organizar |
 | `src/componentes/` | base do Vue (montagem no Shadow DOM) e o que o Individual e o Lote compartilham: sala, data, pauta do dia, tipo composto, GIGS, passos da execução |
 | `src/individual/` | painel do Controle Individual (Vue): os `.vue` mostram, e os `.ts` ao lado guardam o estado e as regras |
 | `src/lote/` | Controle em Lote (Vue, 3.1): lista colada, consulta dos processos, "Não incluídos", pauta (`pauta.ts`, regras puras), arrastar e rascunho |
@@ -82,7 +83,7 @@ PJe.
 | `src/prova/` | painel de diagnóstico (só leitura) |
 | `src/config/` | opções, termos e posição do botão (puro e testado) |
 | `src/ext/` | API de extensão: armazenamento e mensagens |
-| `src/paginas/` | páginas de termos e de opções |
+| `src/paginas/` | páginas de termos e de opções (as Opções em Vue, em `src/paginas/opcoes/`) |
 | `src/ui/` | botão flutuante, ícone e utilidades de interface (sem Vue; Shadow DOM) |
 | `scripts/` | build e geração dos manifests de cada navegador |
 | `tests/` | testes (Vitest); as fixtures não têm dados pessoais |

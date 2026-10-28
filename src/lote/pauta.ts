@@ -247,6 +247,36 @@ export function mesclarItens(atuais: ItemLote[], numeros: string[]): ItemLote[] 
   return [...mantidos, ...novos];
 }
 
+/**
+ * Auto organizar (D48): os processos passam a seguir `ordem` (as chaves já ordenadas), e cada
+ * intervalo manual fica com o mesmo número de audiências antes dele (D48i). Os "a cada N" e os
+ * horários são recalculados pela pauta. Cada processo leva os próprios ajustes (D48d).
+ */
+export function reordenarItens(itens: ItemLote[], ordem: string[]): ItemLote[] {
+  const processos = new Map(itens.filter((i) => i.tipo === 'processo').map((i) => [i.chave, i]));
+  const ordenados: ItemLote[] = ordem.map((c) => processos.get(c)).filter((i) => i !== undefined);
+  // Quem não veio em `ordem` (não deveria acontecer) fica no fim, na posição relativa de antes.
+  for (const i of processos.values()) if (!ordem.includes(i.chave)) ordenados.push(i);
+  const intervalos: { antes: number; item: ItemLote }[] = [];
+  let contados = 0;
+  for (const i of itens) {
+    if (i.tipo === 'processo') contados++;
+    else intervalos.push({ antes: contados, item: i });
+  }
+  const resultado: ItemLote[] = [];
+  const pendentes = [...intervalos];
+  const soltarAte = (n: number) => {
+    while (pendentes.length && pendentes[0]!.antes <= n) resultado.push(pendentes.shift()!.item);
+  };
+  soltarAte(0);
+  ordenados.forEach((item, i) => {
+    resultado.push(item);
+    soltarAte(i + 1);
+  });
+  for (const r of pendentes) resultado.push(r.item);
+  return resultado;
+}
+
 export function novoIntervalo(itens: ItemLote[], duracao: number): ItemLote {
   const usados = new Set(itens.map((i) => i.chave));
   let n = 1;
@@ -268,6 +298,8 @@ export interface Rascunho {
   hash: string;
   topo: Topo;
   itens: ItemLote[];
+  /** Nome do conjunto do Auto organizar aplicado por último, se a lista não foi arrastada depois (D48e). */
+  ordenacao?: string;
 }
 
 const NUMERO_CNJ = /^\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}$/;
@@ -341,7 +373,9 @@ export function lerRascunho(bruto: unknown, idOrgao: number): Rascunho | null {
   const chaves = new Set<string>();
   const unicos = itens.filter((i) => !chaves.has(i.chave) && chaves.add(i.chave));
   if (!unicos.some((i) => i.tipo === 'processo')) return null;
-  return { versao: 1, idOrgao, salvoEm: r['salvoEm'], hash: r['hash'], topo: normalizarTopo(r['topo']), itens: unicos };
+  const rascunho: Rascunho = { versao: 1, idOrgao, salvoEm: r['salvoEm'], hash: r['hash'], topo: normalizarTopo(r['topo']), itens: unicos };
+  if (typeof r['ordenacao'] === 'string' && r['ordenacao']) rascunho.ordenacao = r['ordenacao'];
+  return rascunho;
 }
 
 export const chaveRascunho = (idOrgao: number) => `lote.rascunho.${idOrgao}`;

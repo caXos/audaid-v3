@@ -8,6 +8,7 @@ import { avaliarData, nomeSala } from '../componentes/mensagens';
 import type { SugestaoGigs } from '../config/opcoes';
 import type { EventoCalendario, Sala, TipoAudiencia } from '../pje/api';
 import { pendenciaGigs, resolverVariaveis, type DadosVariaveisGigs } from '../regras/gigs';
+import { nomeDoConjunto, ordenarProcessos, type ConjuntoRegras } from '../regras/organizar';
 import { avisoHorario } from './apresentacao';
 import {
   ajustado,
@@ -22,6 +23,7 @@ import {
   moverItem,
   novoIntervalo,
   paraHora,
+  reordenarItens,
   tipoDoItem,
   type AjustesItem,
   type CampoAjustavel,
@@ -40,6 +42,8 @@ export interface ContextoPauta {
   salas: Sala[];
   eventos: EventoCalendario[];
   sugestoes: SugestaoGigs[];
+  /** Conjuntos do Auto organizar, das Opções (D48). */
+  conjuntos: ConjuntoRegras[];
   /** Os processos consultados na tela 1, pelo número. */
   processos: () => Map<string, ProcessoDoLote>;
 }
@@ -48,6 +52,8 @@ export interface InicioPauta {
   topo: Topo;
   itens: ItemLote[];
   hash: string;
+  /** Conjunto aplicado por último (vem do rascunho, D18). */
+  ordenacao?: string;
 }
 
 /** Uma linha da lista como a tela mostra: o horário calculado e, nos processos, o resto. */
@@ -71,6 +77,11 @@ export function usePauta(ctx: ContextoPauta, inicio: InicioPauta) {
   const topo = reactive({ ...semGigs, idSala: salaInicial, intervalo: { ...inicio.topo.intervalo } });
   const itens = ref<ItemLote[]>(inicio.itens);
   const hash = inicio.hash;
+  // Auto organizar (D48e): o conjunto aplicado (null = "Ordem manual") e se a lista foi arrastada
+  // à mão depois disso; nesse caso, aplicar outro conjunto pede confirmação.
+  const conjuntos = ctx.conjuntos.map((conjunto) => ({ nome: nomeDoConjunto(conjunto), conjunto }));
+  const ordenacao = ref<string | null>(conjuntos.some((c) => c.nome === inicio.ordenacao) ? inicio.ordenacao! : null);
+  const arrastadaAMao = ref(false);
 
   const sala = computed(() => ctx.salas.find((s) => s.id === topo.idSala));
   /** O `CampoSala` trabalha com texto. */
@@ -211,16 +222,45 @@ export function usePauta(ctx: ContextoPauta, inicio: InicioPauta) {
     adicionarIntervalo() {
       itens.value = [...itens.value, novoIntervalo(itens.value, topo.intervalo.duracao)];
     },
+    /** Mover à mão (arrastar ou teclado): a dropdown volta para "Ordem manual" (D48e). */
     mover(de: number, para: number) {
+      const antes = itens.value;
       itens.value = moverItem(itens.value, de, para);
+      if (itens.value !== antes) {
+        arrastadaAMao.value = true;
+        ordenacao.value = null;
+      }
     },
-    /** Continuar de novo a partir do texto (ver `mesclarItens`). */
+    /** Continuar de novo a partir do texto (ver `mesclarItens`). Quem entra no fim desfaz a ordenação. */
     mesclar(numeros: string[]) {
+      const ja = new Set(itens.value.map((i) => i.chave));
       itens.value = mesclarItens(itens.value, numeros);
+      if (numeros.some((n) => !ja.has(n))) ordenacao.value = null;
+    },
+    conjuntos,
+    ordenacao,
+    arrastadaAMao,
+    /** Aplica o conjunto (D48): os processos em cascata; os intervalos manuais no lugar (D48i). */
+    aplicarOrdenacao(nome: string) {
+      const escolhido = conjuntos.find((c) => c.nome === nome);
+      if (!escolhido) return;
+      const processos = ctx.processos();
+      const presentes = itens.value
+        .filter((i) => i.tipo === 'processo')
+        .map((i) => processos.get(i.chave))
+        .filter((p) => p !== undefined)
+        .map((p) => ({ chave: p.numero, numero: p.numero, partes: p.partes, juizoDigital: Boolean(p.processo.juizoDigital) }));
+      itens.value = reordenarItens(itens.value, ordenarProcessos(presentes, escolhido.conjunto).map((p) => p.chave));
+      ordenacao.value = nome;
+      arrastadaAMao.value = false;
+    },
+    /** "Ordem manual" escolhida na dropdown: não mexe na lista. */
+    ordemManual() {
+      ordenacao.value = null;
     },
     /** O que vai para o rascunho (D18): sem nomes de partes, sem texto colado. */
-    paraRascunho(): { hash: string; topo: Topo; itens: ItemLote[] } {
-      return { hash, topo: topoCompleto.value, itens: itens.value };
+    paraRascunho(): { hash: string; topo: Topo; itens: ItemLote[]; ordenacao?: string } {
+      return { hash, topo: topoCompleto.value, itens: itens.value, ...(ordenacao.value ? { ordenacao: ordenacao.value } : {}) };
     },
   });
 }

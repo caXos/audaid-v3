@@ -15,6 +15,42 @@ const props = defineProps<{ lote: EstadoLote }>();
 const lista = ref<HTMLElement | null>(null);
 const editandoGigs = ref<string | null>(null);
 const dialogoNaoIncluidos = ref<{ abrir(): void } | null>(null);
+const dialogoOrdenar = ref<{ abrir(): void; fechar(): void } | null>(null);
+/** Conjunto escolhido na dropdown, à espera da confirmação (D48e). */
+const ordenacaoPendente = ref<string | null>(null);
+
+/**
+ * Auto organizar (D48, D63): escolher um conjunto aplica na hora. Se a lista já foi arrastada à
+ * mão, pergunta antes; até a resposta, a dropdown continua mostrando o valor anterior.
+ */
+function escolherOrdenacao(ev: Event) {
+  const pauta = props.lote.pauta;
+  if (!pauta) return;
+  const select = ev.target as HTMLSelectElement;
+  const nome = select.value;
+  if (!nome) {
+    pauta.ordemManual();
+    return;
+  }
+  if (!pauta.arrastadaAMao) {
+    pauta.aplicarOrdenacao(nome);
+    return;
+  }
+  select.value = pauta.ordenacao ?? '';
+  ordenacaoPendente.value = nome;
+  dialogoOrdenar.value?.abrir();
+}
+
+function confirmarOrdenacao() {
+  if (ordenacaoPendente.value) props.lote.pauta?.aplicarOrdenacao(ordenacaoPendente.value);
+  ordenacaoPendente.value = null;
+  dialogoOrdenar.value?.fechar();
+}
+
+function manterOrdem() {
+  ordenacaoPendente.value = null;
+  dialogoOrdenar.value?.fechar();
+}
 const arr = useArrastar((de, para) => props.lote.pauta?.mover(de, para));
 
 /** ↑ e ↓ na alça: move e mantém o foco na mesma linha, na posição nova. */
@@ -44,11 +80,33 @@ async function moverTeclado(indice: number, passo: number) {
       </ul>
     </Dialogo>
 
+    <!-- D48e: só pergunta quando há algo a perder (a lista foi arrastada à mão). -->
+    <Dialogo
+      ref="dialogoOrdenar"
+      class="dialogo-ordenar"
+      titulo="Reordenar a lista?"
+      :dica="`A ordem que você montou será substituída por: ${ordenacaoPendente ?? ''}.`"
+      @close="ordenacaoPendente = null"
+    >
+      <div class="linha-form">
+        <button class="acao" type="button" @click="confirmarOrdenacao">Reordenar</button>
+        <button class="acao secundaria" type="button" @click="manterOrdem">Manter a minha ordem</button>
+      </div>
+    </Dialogo>
+
     <TopoLote :pauta="lote.pauta" />
 
     <section class="cartao">
       <div class="cartao-topo">
         <h2>2. Pauta: {{ lote.pauta.quantidade }} processo(s)</h2>
+        <!-- D63: o Auto organizar fica junto da lista que ele reordena. -->
+        <label class="ordenar">
+          Ordenar:
+          <select :value="lote.pauta.ordenacao ?? ''" title="Auto organizar: os conjuntos de regras ficam nas Opções do AudAid" @change="escolherOrdenacao">
+            <option value="">Ordem manual</option>
+            <option v-for="c in lote.pauta.conjuntos" :key="c.nome" :value="c.nome">{{ c.nome }}</option>
+          </select>
+        </label>
         <!-- D60: junto da contagem e do "Voltar ao texto", que é como se resolve; não gasta linha. -->
         <button
           v-if="lote.naoIncluidos.length"
@@ -93,6 +151,8 @@ async function moverTeclado(indice: number, passo: number) {
 <style>
 .lista-nao-incluidos { max-height: 340px; overflow: auto; margin: 0; padding-left: 18px; border: 1px solid #eef1f4; border-radius: 6px; padding-top: 6px; padding-bottom: 6px; }
 .lista-nao-incluidos li { margin: 2px 0; }
+.ordenar { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--cor-suave); font-weight: 600; }
+.ordenar select { max-width: 420px; font-weight: 400; }
 .lista-pauta { display: flex; flex-direction: column; gap: 0; padding: 0; }
 .linha-lote {
   display: grid; align-items: center; gap: 2px 10px; padding: 6px 10px;
