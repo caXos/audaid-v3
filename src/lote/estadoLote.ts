@@ -1,6 +1,6 @@
-// Estado do Controle em Lote (§2.3): tela 1 (texto), tela 2 (pauta) e o resumo provisório até a
-// tela 3 (entrega 4). Guarda o rascunho (D18) e o topo lembrado (D56). Os .vue só mostram; o
-// padrão é o de src/individual/formulario.ts.
+// Estado do Controle em Lote (§2.3): tela 1 (texto), tela 2 (pauta) e tela 3 (conferência). Guarda
+// o rascunho (D18) e o topo lembrado (D56). Os .vue só mostram; o padrão é o de
+// src/individual/formulario.ts.
 
 import { computed, effectScope, onBeforeUnmount, reactive, ref, shallowRef, watch } from 'vue';
 import type { SugestaoGigs } from '../config/opcoes';
@@ -125,7 +125,8 @@ export function useLote(ambiente: Ambiente, versao: string, sugestoes: SugestaoG
     } else {
       const itens: ItemLote[] = mesclarItens(base?.itens ?? [], incluidos);
       const topo = base?.topo ?? { ...(topoLembrado ?? normalizarTopo(undefined)), data: '' };
-      pauta.value = escopo.run(() => criarPauta(orgao, d, { topo, itens, hash: base?.hash ?? gerarHash(), ordenacao: base?.ordenacao })) ?? null;
+      const inicio = { topo, itens, hash: base?.hash ?? gerarHash(), ordenacao: base?.ordenacao, horarios: base?.horarios, vagasLivres: base?.vagasLivres };
+      pauta.value = escopo.run(() => criarPauta(orgao, d, inicio)) ?? null;
     }
     rascunho.value = null;
     tela.value = 'pauta';
@@ -133,9 +134,23 @@ export function useLote(ambiente: Ambiente, versao: string, sugestoes: SugestaoG
 
   function criarPauta(o: OrgaoLogado, d: DadosDoOrgao, inicio: Parameters<typeof usePauta>[1]): EstadoPauta {
     const p = usePauta(
-      { descricaoOrgao: o.descricao, nomeUsuario: sessao.nomeUsuario, tipos: d.tipos, salas: d.salas, eventos: d.eventos, sugestoes, conjuntos, processos: () => processos.value },
+      {
+        origem: ambiente.origem,
+        descricaoOrgao: o.descricao,
+        nomeUsuario: sessao.nomeUsuario,
+        tipos: d.tipos,
+        salas: d.salas,
+        eventos: d.eventos,
+        sugestoes,
+        conjuntos,
+        processos: () => processos.value,
+      },
       inicio,
     );
+    // Na tela 3, o plano fica sobre a pauta que a tela 2 viu (D66, D78).
+    watch(tela, (t) => {
+      p.emEdicao = t !== 'conferencia';
+    });
     // D18 e D56: grava o rascunho e o topo a cada mudança, depois de uma pequena espera.
     let temporizador: ReturnType<typeof setTimeout> | undefined;
     watch(
@@ -143,8 +158,8 @@ export function useLote(ambiente: Ambiente, versao: string, sugestoes: SugestaoG
       () => {
         clearTimeout(temporizador);
         temporizador = setTimeout(() => {
-          const { hash, topo, itens, ordenacao } = p.paraRascunho();
-          const r: Rascunho = { versao: 1, idOrgao: o.id, salvoEm: new Date().toISOString(), hash, topo, itens, ...(ordenacao ? { ordenacao } : {}) };
+          const { topo, ...resto } = p.paraRascunho();
+          const r: Rascunho = { versao: 1, idOrgao: o.id, salvoEm: new Date().toISOString(), topo, ...resto };
           void armazenamento.gravar(chaveRascunho(o.id), JSON.parse(JSON.stringify(r)));
           // O dia nunca é lembrado (D56).
           void armazenamento.gravar(chaveTopo(o.id), JSON.parse(JSON.stringify({ ...topo, data: '' })));

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Controle em Lote (§2.3) num diálogo de tela cheia sobre o PJe (D19): tela 1 (texto), tela 2
-// (pauta) e tela 3 (conferência). A tela 4 (execução) chega na entrega 5.
+// (pauta) e tela 3 (conferência). A tela 4 (execução) chega na entrega 6.
 import type { SugestaoGigs } from '../config/opcoes';
 import type { ConjuntoRegras } from '../regras/organizar';
 import type { Armazenamento } from '../ext/api';

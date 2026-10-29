@@ -132,8 +132,17 @@ async function irParaPauta(p: Painel) {
 /** Preenche o que falta no topo para poder continuar: dia e tipo. */
 async function preencherTopo(p: Painel) {
   await p.mudar(p.topo().querySelector<HTMLInputElement>('input[type="date"]')!, DIA);
-  await p.mudar(p.topo().querySelectorAll('select')[1]!, 'Conciliação'); // sala, tipo base, Semana Nacional, GIGS
+  await p.mudar(p.topo().querySelectorAll('select')[1]!, 'Conciliação'); // sala, tipo base, Semana Nacional, horários, GIGS
 }
+
+/** Espera a tela 2 terminar de consultar a pauta da sala (rodada 15). */
+async function esperarPautaDaTela2(p: Painel) {
+  await vi.waitFor(() => expect(p.raiz.querySelector('.msg-pauta')!.textContent).toMatch(/^Pauta do dia/), { timeout: 2000 });
+}
+
+// A pauta do dia no PJe falso.
+const deFora = (hora: string, id = 999, nr = '0000999-11.2026.5.09.0001') => ({ idProcesso: id, nrProcesso: nr, status: 'M', pautaAudienciaHorario: { horaInicial: `${hora}:00`, horaFinal: `${hora}:00` } });
+const vaga = (hora: string) => ({ tipo: { id: 3, descricao: 'Conciliação' }, pautaAudienciaHorario: { horaInicial: `${hora}:00`, horaFinal: `${hora}:00` } });
 
 describe('Controle em Lote, tela 1', () => {
   it('reconhece os números ao colar; sem número, não dá para continuar; nada é consultado antes', async () => {
@@ -290,15 +299,19 @@ describe('Controle em Lote, tela 2 (entrega 2)', () => {
   });
 });
 
-describe('Tela 3: conferência com a pauta da sala (D28, D32, D65–D67)', () => {
-  const deFora = (hora: string, id = 999, nr = '0000999-11.2026.5.09.0001') => ({ idProcesso: id, nrProcesso: nr, status: 'M', pautaAudienciaHorario: { horaInicial: `${hora}:00`, horaFinal: `${hora}:00` } });
-  const vaga = (hora: string) => ({ tipo: { id: 3, descricao: 'Conciliação' }, pautaAudienciaHorario: { horaInicial: `${hora}:00`, horaFinal: `${hora}:00` } });
+describe('Tela 3: conferência com a pauta da sala (D28, D32, D65–D67, D78)', () => {
   const inicioNa3 = (p: Painel, numero: string) =>
     [...p.raiz.querySelectorAll('tr.linha-conferida')].find((tr) => tr.textContent?.includes(numero))?.querySelectorAll('td')[2]?.textContent;
 
-  async function irParaConferencia(p: Painel) {
+  /**
+   * A tela 2 monta a pauta com a sala vazia; `mudou` é a pauta que a tela 3 encontra ao consultar
+   * de novo, como se outro servidor tivesse designado nesse meio (D78).
+   */
+  async function irParaConferencia(p: Painel, mudou?: object[]) {
     await irParaPauta(p);
     await preencherTopo(p);
+    await esperarPautaDaTela2(p);
+    if (mudou) pautaDaSala = mudou;
     await p.clicar(p.botao(/^Continuar$/));
     await vi.waitFor(() => expect(p.texto()).toContain('3. Conferência'));
     await vi.waitFor(() => expect(p.texto()).toContain('Pauta da sala no PJe'), { timeout: 2000 });
@@ -306,10 +319,15 @@ describe('Tela 3: conferência com a pauta da sala (D28, D32, D65–D67)', () =>
 
   it('vermelho, amarelo e audiência existente; vaga não conta; "Encaixar" (padrão) resolve e libera o Continuar', async () => {
     // Lote: N1 às 09:00 (10 min) e N3 às 09:10. N3 já tem audiência no órgão (20/10).
-    pautaDaSala = [vaga('09:00'), deFora('09:10'), deFora('09:05', 777, '0000777-22.2026.5.09.0001')];
     const p = abrir();
-    await irParaConferencia(p);
+    await irParaConferencia(p, [vaga('09:00'), deFora('09:10'), deFora('09:05', 777, '0000777-22.2026.5.09.0001')]);
     expect(p.texto()).toContain('Pauta da sala no PJe: 2 audiência(s) de fora do lote e 1 vaga(s)');
+    // D78: o que mudou desde a tela 2, e o plano não se mexeu sozinho.
+    const mudancas = p.raiz.querySelector('.mudancas-pauta')!;
+    expect(mudancas.textContent).toContain('A pauta da sala mudou desde a tela 2');
+    expect(mudancas.textContent).toContain('entrou 0000999-11.2026.5.09.0001 às 09:10');
+    expect(mudancas.textContent).toContain('vaga nova às 09:00');
+    expect([inicioNa3(p, N1), inicioNa3(p, N3)]).toEqual(['09:00', '09:10']);
     expect(p.raiz.querySelector('.achado-vermelho')!.textContent).toContain('0000999-11.2026.5.09.0001 já começa às 09:10 nesta sala');
     expect(p.raiz.querySelector('.achado-amarelo')!.textContent).toContain('0000777-22.2026.5.09.0001 começa às 09:05');
     expect(p.raiz.querySelector('.achado-existente')!.textContent).toContain('Já tem audiência designada no órgão: 20/10/2026 10:10');
@@ -326,9 +344,8 @@ describe('Tela 3: conferência com a pauta da sala (D28, D32, D65–D67)', () =>
   });
 
   it('"Empurrar" (D65) põe um intervalo com a duração base a partir do processo de fora', async () => {
-    pautaDaSala = [deFora('09:10')];
     const p = abrir();
-    await irParaConferencia(p);
+    await irParaConferencia(p, [deFora('09:10')]);
     await p.mudar(p.raiz.querySelector<HTMLSelectElement>('.achado-vermelho select')!, 'empurrar');
     await p.clicar(p.botao(/^Aplicar$/, p.raiz.querySelector('.achado-vermelho')!));
     expect(inicioNa3(p, N3)).toBe('09:20');
@@ -336,9 +353,17 @@ describe('Tela 3: conferência com a pauta da sala (D28, D32, D65–D67)', () =>
     expect(intervalo.textContent).toContain('Intervalo');
     expect(intervalo.textContent).toContain('09:10');
     expect(p.botao(/^Continuar$/).disabled).toBe(false);
-    // A mudança vale para a pauta (tela 2) também.
+    // A mudança vale para a pauta (tela 2) também, e lá a audiência nova aparece, no horário dela.
     await p.clicar(p.botao(/^Voltar à pauta$/));
     expect(p.raiz.querySelectorAll('.linha-intervalo')).toHaveLength(1);
+    await vi.waitFor(() => expect(p.raiz.querySelector('.linha-fora')?.textContent).toContain('0000999-11.2026.5.09.0001'));
+    expect(p.inicios()).toEqual(['09:00', '09:20']);
+  });
+
+  it('sem mudança na pauta, a tela 3 diz isso', async () => {
+    const p = abrir();
+    await irParaConferencia(p);
+    expect(p.raiz.querySelector('.sem-mudancas')!.textContent).toBe('Nada mudou na pauta da sala desde a tela 2.');
   });
 
   it('audiência existente: "Redesignar" é o padrão; "Remover da lista" tira o processo e recalcula', async () => {
@@ -353,9 +378,8 @@ describe('Tela 3: conferência com a pauta da sala (D28, D32, D65–D67)', () =>
   });
 
   it('"Aplicar o padrão a todos" resolve um vermelho por vez; "Consultar de novo" relê a pauta', async () => {
-    pautaDaSala = [deFora('09:00'), deFora('09:10', 888, '0000888-33.2026.5.09.0001')];
     const p = abrir();
-    await irParaConferencia(p);
+    await irParaConferencia(p, [deFora('09:00'), deFora('09:10', 888, '0000888-33.2026.5.09.0001')]);
     expect(p.raiz.querySelectorAll('.achado-vermelho')).toHaveLength(2);
     await p.clicar(p.botao(/^Aplicar o padrão a todos$/));
     expect(p.raiz.querySelectorAll('.achado-vermelho')).toHaveLength(0);
@@ -363,6 +387,143 @@ describe('Tela 3: conferência com a pauta da sala (D28, D32, D65–D67)', () =>
     const antes = consultasPauta;
     await p.clicar(p.botao(/^Consultar de novo$/));
     await vi.waitFor(() => expect(consultasPauta).toBe(antes + 1), { timeout: 2000 });
+  });
+});
+
+describe('A pauta do PJe na tela 2 (entrega 5, rodada 15)', () => {
+  /** "número@HH:MM" de cada linha, na ordem da tela; "vaga@HH:MM" nas vagas. */
+  const desenho = (p: Painel) =>
+    [...p.raiz.querySelectorAll<HTMLElement>('.lista-pauta [data-inicio]')].map((l) => `${l.classList.contains('linha-vaga') ? 'vaga' : l.querySelector('.numero')!.textContent}@${l.dataset.inicio}`);
+  const horarios = (p: Painel) => p.topo().querySelector<HTMLSelectElement>('.campo-horarios select')!;
+
+  async function irParaPautaComPje(p: Painel) {
+    await irParaPauta(p);
+    await preencherTopo(p);
+    await esperarPautaDaTela2(p);
+  }
+
+  it('consulta a pauta ao escolher sala e dia; sem vaga, os horários seguem em sequência', async () => {
+    const p = abrir();
+    await irParaPauta(p);
+    expect(p.raiz.querySelector('.msg-pauta')!.textContent).toBe('Escolha sala e dia: a pauta da sala é consultada na hora.');
+    await preencherTopo(p);
+    await esperarPautaDaTela2(p);
+    expect(p.raiz.querySelector('.msg-pauta')!.textContent).toBe('Pauta do dia vazia nesta sala.');
+    expect(lidos.some((l) => l.includes('classificacoes/dia?idSalaAudiencia=503&data=2026-11-17'))).toBe(true);
+    expect(horarios(p).value).toBe('sequencia');
+    expect(horarios(p).disabled).toBe(true);
+    expect(p.inicios()).toEqual(['09:00', '09:10']);
+  });
+
+  it('pelas vagas (D73): os processos ocupam as vagas na ordem; "Deixar livre", "Usar esta vaga" e "Levar para a vaga"', async () => {
+    pautaDaSala = [vaga('09:00'), vaga('09:10'), vaga('09:20')];
+    const p = abrir();
+    await irParaPautaComPje(p);
+    expect(p.raiz.querySelector('.msg-pauta')!.textContent).toContain('Pauta do dia: 0 audiência(s), 3 vaga(s).');
+    expect(horarios(p).value).toBe('vagas');
+    expect(desenho(p)).toEqual([`${N1}@09:00`, `${N3}@09:10`, 'vaga@09:20']);
+    expect(p.linhas().every((l) => l.classList.contains('na-vaga'))).toBe(true);
+    expect(p.raiz.querySelector('.linha-vaga')!.textContent).toContain('Vaga livre');
+    // As vagas definem os horários: início, duração e intervalos ficam desabilitados.
+    expect(p.topo().querySelector<HTMLInputElement>('input[type="time"]')!.disabled).toBe(true);
+    expect(p.numeroDoTopo(0).disabled).toBe(true);
+    expect(p.botao(/^Adicionar intervalo$/).disabled).toBe(true);
+
+    await p.clicar(p.botao(/^deixar livre$/, p.linhas()[0]!));
+    expect(desenho(p)).toEqual(['vaga@09:00', `${N1}@09:10`, `${N3}@09:20`]);
+    expect(p.raiz.querySelector('.linha-vaga')!.textContent).toContain('Deixada livre');
+    await p.clicar(p.botao(/^Usar esta vaga$/));
+    expect(desenho(p)).toEqual([`${N1}@09:00`, `${N3}@09:10`, 'vaga@09:20']);
+
+    await p.mudar(p.linhas()[0]!.querySelector<HTMLSelectElement>('.campo-vaga select')!, '09:20'); // N1 → 09:20
+    expect(desenho(p)).toEqual([`${N3}@09:00`, 'vaga@09:10', `${N1}@09:20`]);
+    expect(p.linhas()[1]!.querySelector('.campo-vaga select')!.classList.contains('ancorado')).toBe(true);
+
+    await p.mudar(horarios(p), 'sequencia');
+    expect(p.raiz.querySelector('.linha-vaga')).toBeNull();
+    expect(p.topo().querySelector<HTMLInputElement>('input[type="time"]')!.disabled).toBe(false);
+  });
+
+  it('quem passa das vagas segue depois da última, com a duração base e um aviso', async () => {
+    pautaDaSala = [vaga('09:00')];
+    const p = abrir();
+    await irParaPautaComPje(p);
+    expect(desenho(p)).toEqual([`${N1}@09:00`, `${N3}@09:10`]);
+    expect(p.linhas()[1]!.querySelector('.aviso-linha')!.textContent).toContain('Além das vagas configuradas');
+    expect(p.botao(/^Continuar$/).disabled).toBe(false); // só avisa
+  });
+
+  it('audiências que já estavam no dia (D74): roxas, sem alça, no horário delas; os novos se encaixam em volta', async () => {
+    pautaDaSala = [
+      {
+        ...deFora('09:10'),
+        tipo: { id: 9, descricao: 'Instrução' },
+        poloAtivo: { nome: 'CARLOS FICTICIO', representaVarios: false },
+        poloPassivo: { nome: 'BETA SERVICOS LTDA', representaVarios: true },
+      },
+    ];
+    const p = abrir();
+    await irParaPautaComPje(p);
+    const fora = p.raiz.querySelector<HTMLElement>('.linha-fora')!;
+    expect(fora.textContent).toContain('0000999-11.2026.5.09.0001');
+    expect(fora.textContent).toContain('Já na pauta');
+    expect(fora.textContent).toContain('Instrução');
+    expect([...fora.querySelectorAll('.linha-parte')].map((x) => x.textContent!.trim())).toEqual(['CARLOS FICTICIO', 'BETA SERVICOS LTDA(+)']);
+    expect(fora.querySelector('.alca')!.textContent).toBe('');
+    expect(desenho(p)).toEqual([`${N1}@09:00`, '0000999-11.2026.5.09.0001@09:10', `${N3}@09:20`]);
+    // A duração dela só muda o desenho da pauta.
+    await p.mudar(fora.querySelector<HTMLInputElement>('input[type="number"]')!, '30');
+    expect(p.inicios()).toEqual(['09:00', '09:40']);
+    // Ela não vai para o rascunho e não entra no Auto organizar.
+    await p.mudar(p.raiz.querySelector<HTMLSelectElement>('label.ordenar select')!, '1. Nome da reclamada (A→Z)');
+    expect(desenho(p)).toEqual([`${N3}@09:00`, '0000999-11.2026.5.09.0001@09:10', `${N1}@09:40`]);
+  });
+
+  it('processo da lista que já está nesta pauta não é roxo; no mesmo horário e tipo, "sem mudança" (D79)', async () => {
+    const conciliacao = tipos.find((t) => t.descricao === 'Conciliação em Conhecimento')!;
+    pautaDaSala = [{ ...deFora('09:10', 3, N3), tipo: conciliacao }];
+    const p = abrir();
+    await irParaPautaComPje(p);
+    expect(p.raiz.querySelector('.linha-fora')).toBeNull();
+    const n3 = () => p.linhas()[1]!;
+    expect(n3().querySelector('.sem-mudanca')).not.toBeNull();
+    expect(n3().querySelector('.resumo-gigs')!.textContent).toBe('Sem GIGS (sem mudança)');
+    await p.mudar(p.numeroDoTopo(0), '15'); // N3 passa para 09:15
+    expect(n3().querySelector('.sem-mudanca')).toBeNull();
+    expect(n3().textContent).toContain('nesta pauta, 09:10');
+  });
+
+  it('conflito com a pauta da sala já na tela 2, com a ação da tela 3 na própria linha (D78)', async () => {
+    pautaDaSala = [deFora('09:30')];
+    const p = abrir();
+    await irParaPautaComPje(p);
+    const n3 = () => p.linhas().find((l) => l.querySelector('.numero')!.textContent === N3)!;
+    await p.mudar(n3().querySelector<HTMLInputElement>('input[type="time"]')!, '09:30');
+    expect(n3().classList.contains('conflito-vermelho')).toBe(true);
+    expect(n3().querySelector('.aviso-linha')!.textContent).toContain('0000999-11.2026.5.09.0001 já começa às 09:30');
+    expect(p.botao(/^Continuar$/).disabled).toBe(false); // a tela 3 é que barra
+    await p.clicar(p.botao(/^Aplicar$/, n3()));
+    expect(n3().dataset.inicio).toBe('09:31');
+    expect(n3().classList.contains('conflito-vermelho')).toBe(false);
+  });
+
+  it('o rascunho guarda o modo de horários e as vagas deixadas livres, sem as audiências de fora', async () => {
+    pautaDaSala = [vaga('09:00'), vaga('09:10'), vaga('09:20'), deFora('11:00')];
+    const mem = memoria();
+    const p = abrir(mem);
+    await irParaPautaComPje(p);
+    await p.clicar(p.botao(/^deixar livre$/, p.linhas()[0]!));
+    await vi.waitFor(() => expect(JSON.stringify(mem.dados.get('lote.rascunho.174') ?? {})).toContain('"vagasLivres":["09:00"]'), { timeout: 2000 });
+    const guardado = JSON.stringify(mem.dados.get('lote.rascunho.174'));
+    expect(guardado).toContain('"horarios":"vagas"');
+    expect(guardado).not.toContain('fora-');
+    p.lote.fechar();
+    p.lote.abrir(opcoesPadrao(true));
+    await vi.waitFor(() => expect(p.texto()).toContain('Retomar rascunho'));
+    await p.clicar(p.botao(/^Retomar rascunho/));
+    await vi.waitFor(() => expect(p.texto()).toContain('2. Pauta: 2 processo(s)'));
+    await esperarPautaDaTela2(p);
+    expect(desenho(p)).toEqual(['vaga@09:00', `${N1}@09:10`, `${N3}@09:20`, '0000999-11.2026.5.09.0001@11:00']);
   });
 });
 

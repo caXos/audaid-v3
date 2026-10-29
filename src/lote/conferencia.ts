@@ -84,6 +84,28 @@ export function conferir(itens: ItemParaConferir[], entradas: EntradaPauta[]): M
 }
 
 /**
+ * O que mudou na pauta da sala desde a tela 2 (D78), em ordem de horário: outro servidor pode ter
+ * ocupado um horário entre montar e gravar (§6, item 2). Lista vazia = nada mudou.
+ */
+export function mudancasDaPauta(antes: EntradaPauta[], depois: EntradaPauta[]): string[] {
+  const audiencias = (l: EntradaPauta[]) => new Map(l.filter((e) => e.tipo === 'audiencia' && e.idProcesso !== undefined).map((e) => [e.idProcesso!, e]));
+  const vagas = (l: EntradaPauta[]) => new Set(l.filter((e) => e.tipo === 'vaga').map((e) => e.hora));
+  const [audAntes, audDepois, vagasAntes, vagasDepois] = [audiencias(antes), audiencias(depois), vagas(antes), vagas(depois)];
+  const ocupadaAgora = (hora: string) => [...audDepois.values()].some((e) => e.hora === hora);
+  const r: { hora: string; texto: string }[] = [];
+  for (const [id, e] of audDepois) {
+    const velha = audAntes.get(id);
+    const naVaga = vagasAntes.has(e.hora) && !vagasDepois.has(e.hora) ? ', numa vaga' : '';
+    if (!velha) r.push({ hora: e.hora, texto: `entrou ${rotulo(e)} às ${e.hora}${naVaga}` });
+    else if (velha.hora !== e.hora) r.push({ hora: e.hora, texto: `${rotulo(e)} passou das ${velha.hora} para as ${e.hora}${naVaga}` });
+  }
+  for (const [id, e] of audAntes) if (!audDepois.has(id)) r.push({ hora: e.hora, texto: `${rotulo(e)} saiu das ${e.hora}` });
+  for (const h of vagasAntes) if (!vagasDepois.has(h) && !ocupadaAgora(h)) r.push({ hora: h, texto: `a vaga das ${h} deixou de existir` });
+  for (const h of vagasDepois) if (!vagasAntes.has(h)) r.push({ hora: h, texto: `vaga nova às ${h}` });
+  return r.sort((a, b) => a.hora.localeCompare(b.hora)).map((x) => x.texto);
+}
+
+/**
  * "Encaixar 1 min depois" (D28): o primeiro minuto depois de `minuto` em que nenhum processo de fora
  * e nenhum outro item do lote começa. `null` se passar da meia-noite.
  */
