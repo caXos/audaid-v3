@@ -1,14 +1,18 @@
 <script setup lang="ts">
 // Tela 2 do Lote (§2.3): "Não incluídos", campos do topo, a lista arrastável e o "Continuar".
-// O estado é o de estadoPauta.ts; as linhas, ItemLote.vue e IntervaloLote.vue.
+// O estado é o de estadoPauta.ts; as linhas, ItemLote.vue, IntervaloLote.vue, e, com a pauta do
+// PJe (rodada 15), VagaLote.vue e ForaLote.vue. Cores (D77): o fundo diz de onde vem a linha, e o
+// conflito fica na borda esquerda e no texto do aviso.
 import { nextTick, ref } from 'vue';
 import Dialogo from '../componentes/Dialogo.vue';
 import { useArrastar } from './arrastar';
 import DialogoGigsItem from './DialogoGigsItem.vue';
 import type { EstadoLote } from './estadoLote';
+import ForaLote from './ForaLote.vue';
 import IntervaloLote from './IntervaloLote.vue';
 import ItemLote from './ItemLote.vue';
 import TopoLote from './TopoLote.vue';
+import VagaLote from './VagaLote.vue';
 
 const props = defineProps<{ lote: EstadoLote }>();
 
@@ -57,7 +61,9 @@ const arr = useArrastar((de, para) => props.lote.pauta?.mover(de, para));
 async function moverTeclado(indice: number, passo: number) {
   const pauta = props.lote.pauta;
   if (!pauta) return;
-  const para = indice + passo;
+  let para = indice + passo;
+  // Pelas vagas, o vizinho é o processo anterior ou o seguinte (as de fora e os intervalos não têm vez).
+  if (pauta.modo === 'vagas') while (para >= 0 && para < pauta.itens.length && pauta.itens[para]!.tipo !== 'processo') para += passo;
   if (para < 0 || para >= pauta.itens.length) return;
   pauta.mover(indice, para);
   await nextTick();
@@ -117,12 +123,25 @@ async function moverTeclado(indice: number, passo: number) {
         >
           Não incluídos ({{ lote.naoIncluidos.length }})
         </button>
-        <button class="acao secundaria" type="button" @click="lote.pauta.adicionarIntervalo()">Adicionar intervalo</button>
+        <span v-if="lote.pauta.intervalosOcultos" class="suave pequeno" title="Voltam se os horários forem em sequência">
+          {{ lote.pauta.intervalosOcultos }} intervalo(s) manual(is) não vale(m) pelas vagas
+        </span>
+        <button
+          class="acao secundaria"
+          type="button"
+          :disabled="lote.pauta.modo === 'vagas'"
+          :title="lote.pauta.modo === 'vagas' ? 'Pelas vagas, para um intervalo, deixe vagas livres' : ''"
+          @click="lote.pauta.adicionarIntervalo()"
+        >
+          Adicionar intervalo
+        </button>
         <button class="acao secundaria" type="button" @click="lote.voltarAoTexto()">Voltar ao texto</button>
       </div>
       <div ref="lista" class="cartao-corpo lista-pauta">
         <template v-for="v in lote.pauta.linhas" :key="v.linha.chave">
           <ItemLote v-if="v.linha.tipo === 'processo'" :vista="v" :pauta="lote.pauta" :arr="arr" @editar-gigs="(c) => (editandoGigs = c)" @mover-teclado="moverTeclado" />
+          <ForaLote v-else-if="v.linha.tipo === 'fora'" :vista="v" :pauta="lote.pauta" :arr="arr" />
+          <VagaLote v-else-if="v.linha.tipo === 'vaga'" :vista="v" :pauta="lote.pauta" />
           <IntervaloLote v-else :vista="v" :pauta="lote.pauta" :arr="arr" @mover-teclado="moverTeclado" />
         </template>
         <div v-if="!lote.pauta.linhas.length" class="suave">A lista está vazia. Volte ao texto e cole os processos.</div>
@@ -156,19 +175,35 @@ async function moverTeclado(indice: number, passo: number) {
 .lista-pauta { display: flex; flex-direction: column; gap: 0; padding: 0; }
 .linha-lote {
   display: grid; align-items: center; gap: 2px 10px; padding: 6px 10px;
-  grid-template-columns: 20px 22px minmax(220px, 1.6fr) minmax(220px, 1.3fr) 86px 70px minmax(150px, 1fr) 104px 24px;
-  border-top: 1px solid #eef1f4; border-left: 3px solid transparent; background: var(--cor-fundo);
+  grid-template-columns: 20px 22px minmax(220px, 1.6fr) minmax(220px, 1.3fr) 96px 70px minmax(150px, 1fr) 104px 24px;
+  border-top: 1px solid #eef1f4; border-left: 5px solid transparent; background: var(--cor-fundo);
 }
 .linha-lote:first-child { border-top: 0; }
 .linha-intervalo { background: var(--cor-fundo-2); }
 .linha-intervalo.automatico { color: var(--cor-suave); font-style: italic; }
 .linha-lote .aviso-linha {
-  grid-column: 3 / -1; height: 1.4em; line-height: 1.4em; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
-  font-size: 11px; color: var(--cor-erro);
+  grid-column: 3 / -1; height: 22px; line-height: 22px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--cor-erro);
 }
-.linha-lote.sinal-sobreposto { border-left-color: #e6c46a; background: #fffbea; }
-.linha-lote.sinal-sobreposto .aviso-linha { color: var(--cor-aviso); }
-.linha-lote.sinal-mesmo-minuto, .linha-lote.sinal-apos-meia-noite { border-left-color: var(--cor-erro); background: var(--cor-erro-fundo); }
+.aviso-linha .texto-aviso { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.aviso-linha select { font-size: 11px; padding: 0 2px; max-width: 200px; }
+.linha-lote .aviso-linha.suave-linha { color: var(--cor-suave); }
+/* D77: o fundo diz de onde vem a linha; o conflito, só a borda e o texto. */
+.linha-lote.na-vaga { background: #eaf2fe; }
+.linha-lote.linha-vaga { background: #fff3e6; border-top: 1px dashed #e8a35c; border-bottom: 1px dashed #e8a35c; }
+.linha-lote.linha-vaga.deixada { background: #fffaf3; }
+.linha-lote.linha-fora { background: #f3ecfb; }
+.linha-lote.sinal-sobreposto, .linha-lote.conflito-amarelo { border-left-color: #e6c46a; }
+.linha-lote.sinal-sobreposto .aviso-linha, .aviso-linha.conflito-amarelo { color: var(--cor-aviso); }
+.linha-lote.sinal-mesmo-minuto, .linha-lote.sinal-apos-meia-noite, .linha-lote.conflito-vermelho { border-left-color: var(--cor-erro); }
+.aviso-linha.conflito-vermelho { color: var(--cor-erro); }
+.selo-mini.vaga-livre { background: #fde3c4; color: #8a4b00; }
+.selo-mini.ja-na-pauta { background: #e4d6f5; color: #5b2a91; }
+.selo-mini.sem-mudanca { background: var(--cor-ok-fundo); color: var(--cor-ok); cursor: help; }
+.pequeno { font-size: 11px; }
+.campo-vaga select { font-size: 12px; max-width: 96px; }
+.campo-vaga select.ancorado { border-color: var(--cor-marca); font-weight: 700; }
+.campo-vaga button { align-self: flex-start; margin-top: 2px; }
 .linha-lote.arrastando { opacity: .45; }
 .linha-lote.alvo-antes { box-shadow: inset 0 3px 0 var(--cor-marca); }
 .linha-lote.alvo-depois { box-shadow: inset 0 -3px 0 var(--cor-marca); }

@@ -1,4 +1,10 @@
-import type { PautaDia } from '../pje/api';
+import type { PautaDia, PoloPauta } from '../pje/api';
+
+/** A primeira parte de um polo e se há mais, como a pauta do dia traz (D74). */
+export interface PoloResumo {
+  nome: string;
+  varios: boolean;
+}
 
 export interface EntradaPauta {
   /** "HH:MM" */
@@ -8,7 +14,13 @@ export interface EntradaPauta {
   idProcesso?: number;
   nrProcesso?: string;
   descricaoTipo?: string;
+  idTipo?: number;
+  poloAtivo?: PoloResumo;
+  poloPassivo?: PoloResumo;
 }
+
+const lerPolo = (p: PoloPauta | undefined): PoloResumo | undefined =>
+  typeof p?.nome === 'string' && p.nome ? { nome: p.nome, varios: Boolean(p.representaVarios) } : undefined;
 
 /**
  * Normaliza a pauta do dia. Só o horário de início importa: o `horaFinal` dessa resposta é
@@ -19,13 +31,21 @@ export function lerPauta(pauta: Partial<PautaDia> | null | undefined): EntradaPa
   const lista = Array.isArray(pauta?.pautasDoDia) ? pauta.pautasDoDia : [];
   return lista
     .filter((p) => p?.pautaAudienciaHorario?.horaInicial)
-    .map((p) => ({
-      hora: (p.pautaAudienciaHorario?.horaInicial ?? '').slice(0, 5),
-      tipo: p.idProcesso == null ? ('vaga' as const) : ('audiencia' as const),
-      idProcesso: p.idProcesso,
-      nrProcesso: p.nrProcesso,
-      descricaoTipo: p.tipo?.descricao,
-    }))
+    .map((p) => {
+      const e: EntradaPauta = {
+        hora: (p.pautaAudienciaHorario?.horaInicial ?? '').slice(0, 5),
+        tipo: p.idProcesso == null ? 'vaga' : 'audiencia',
+        idProcesso: p.idProcesso,
+        nrProcesso: p.nrProcesso,
+        descricaoTipo: p.tipo?.descricao,
+      };
+      if (typeof p.tipo?.id === 'number') e.idTipo = p.tipo.id;
+      const ativo = lerPolo(p.poloAtivo);
+      const passivo = lerPolo(p.poloPassivo);
+      if (ativo) e.poloAtivo = ativo;
+      if (passivo) e.poloPassivo = passivo;
+      return e;
+    })
     .sort((a, b) => a.hora.localeCompare(b.hora));
 }
 

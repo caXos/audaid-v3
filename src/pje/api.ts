@@ -68,6 +68,12 @@ export interface EventoCalendario {
   suspendeInicioFimPrazo?: boolean;
 }
 
+/** Polo na pauta do dia: o nome da primeira parte e se há mais (`representaVarios`), sem a lista. */
+export interface PoloPauta {
+  nome?: string;
+  representaVarios?: boolean;
+}
+
 export interface ItemPauta {
   idProcesso?: number;
   nrProcesso?: string;
@@ -76,6 +82,8 @@ export interface ItemPauta {
   pautaAudienciaHorario?: { id?: number; horaInicial: string; horaFinal: string };
   bloqueado?: boolean;
   data?: string;
+  poloAtivo?: PoloPauta;
+  poloPassivo?: PoloPauta;
 }
 
 export interface PautaDia {
