@@ -51,7 +51,7 @@ export function textoDoAchado(a: Achado): string {
     case 'do-lote':
       return `${a.outro}, do próprio lote, está neste horário hoje e vai sair dele: na execução, ele é redesignado antes.`;
     case 'ciclo':
-      return `Troca circular com ${a.outro}, do próprio lote (um vai para o horário do outro): o PJe recusaria.`;
+      return `Troca circular com ${a.outro}, do próprio lote (um vai para o horário do outro): na execução, um dos dois vai antes para um minuto livre e depois para o horário final (uma redesignação a mais).`;
     case 'existente': {
       const x = a.antiga;
       return `Já tem audiência designada no órgão: ${formatarDataHora(x.dataInicio)} (${x.tipo?.descricao ?? '?'}, ${x.salaFisica?.nome ?? '?'}).`;

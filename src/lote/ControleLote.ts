@@ -3,6 +3,7 @@
 
 import { RaizVue } from '../componentes/montar';
 import type { Opcoes } from '../config/opcoes';
+import type { Transporte } from '../fluxo/executor';
 import type { Armazenamento } from '../ext/api';
 import type { Ambiente } from '../pje/ambiente';
 import { CSS } from '../prova/estilo';
@@ -18,6 +19,8 @@ export class ControleLote {
     private readonly versao: string,
     /** Onde ficam o rascunho e o topo lembrado (D18, D56). Nos testes, em memória. */
     private readonly armazenamento: Armazenamento,
+    /** Só nos testes: o transporte da execução (o real usa `transportePje`). */
+    private readonly transporte?: Transporte,
   ) {
     this.host.id = 'audaid-v3-lote';
     this.raiz = new RaizVue(this.host, CSS);
@@ -44,7 +47,9 @@ export class ControleLote {
       sugestoesGigs: opcoes.gigs.sugestoes,
       conjuntos: opcoes.organizar.conjuntos,
       armazenamento: this.armazenamento,
+      simulacao: opcoes.simulacao,
       aoFechar: () => this.fechar(),
+      ...(this.transporte ? { transporte: this.transporte } : {}),
     });
   }
 }

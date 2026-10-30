@@ -1,6 +1,7 @@
 // Tela 1 do Lote (D12, D27): de cada número, o processo, as partes, os advogados e as audiências.
 // O que não resolve vai para "Não incluídos", com o motivo, sem impedir de seguir. Nada é gravado.
 
+import { audienciaDoOrgao } from '../fluxo/executor';
 import { caminhos, type Audiencia, type Processo, type RespostaPartes } from '../pje/api';
 import type { Resposta } from '../pje/http';
 import { numeroValido } from '../regras/numeros';
@@ -90,9 +91,7 @@ async function resolverUm(numero: string, ler: Leitor, idOrgaoLogado: number): P
   if (!rPartes.ok) return { tipo: 'nao-incluido', motivo: motivoDoErro(rPartes, 'as partes') };
   if (!rAud.ok) return { tipo: 'nao-incluido', motivo: motivoDoErro(rAud, 'as audiências') };
   // Como no Individual: a primeira audiência designada do órgão logado é a que seria substituída.
-  const antiga = [...(rAud.dados ?? [])]
-    .sort((a, b) => a.dataInicio.localeCompare(b.dataInicio))
-    .find((a) => a.salaFisica?.orgaoJulgador?.id === idOrgaoLogado && a.status === 'Designada');
+  const antiga = audienciaDoOrgao(rAud.dados ?? [], idOrgaoLogado);
   return {
     tipo: 'incluido',
     processo: { numero, id, processo, processoBruto: rProc.dados, partes: lerPartes(rPartes.dados), antiga },

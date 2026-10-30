@@ -2,8 +2,8 @@
 // cartão "Resultado" mostra (ResultadoIndividual.vue).
 
 import { reactive } from 'vue';
-import { ROTULO_ESTADO } from '../componentes/mensagens';
 import { executarDesignacao, transportePje, type AcaoSugerida, type PedidoDesignacao, type RegistroPasso, type ResultadoExecucao } from '../fluxo/executor';
+import { linhasDosPassos } from '../fluxo/relatorio';
 import type { EventoCalendario } from '../pje/api';
 import { lerSessao } from '../pje/sessao';
 import { classificarData } from '../regras/calendario';
@@ -52,23 +52,8 @@ export function textoParaCopiar(r: ResultadoExecucao, origem: string, simulando:
     `Resultado: ${r.desfecho} · ${r.resumo}`,
     ...(hash ? [`Código desta execução: ${hash}`] : []),
     '',
+    ...linhasDosPassos(r.passos, origem),
   ];
-  for (const p of r.passos) {
-    linhas.push(`# ${p.titulo} [${ROTULO_ESTADO[p.estado]}]${p.detalhe ? ` ${p.detalhe}` : ''}${p.erro ? ` ERRO: ${p.erro.mensagem} (${p.erro.codigoErro ?? '—'})` : ''}`);
-    if (p.requisicao) {
-      linhas.push(`${p.requisicao.metodo} ${origem}${p.requisicao.caminho}`);
-      const corpo = p.requisicao.corpo;
-      if (corpo !== undefined) {
-        if (p.requisicao.caminho.includes('alteracaoParcial')) {
-          const c = corpo as Record<string, unknown>;
-          linhas.push(`(corpo: o processo inteiro, ${Object.keys(c).length} campos, com juizoDigital = ${String(c['juizoDigital'])})`);
-        } else {
-          linhas.push(JSON.stringify(corpo));
-        }
-      }
-    }
-    linhas.push('');
-  }
   return linhas.join('\n');
 }
 
@@ -150,6 +135,8 @@ export function useEnvio(cfg: ConfiguracaoEnvio) {
         resumo: `Erro inesperado no AudAid: ${e instanceof Error ? e.message : String(e)}. Confira no PJe o estado do processo.`,
         passos: [],
         acoes: [],
+        designou: false,
+        recolocarFalhou: false,
       };
     }
     estado.executando = false;

@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { nextTick } from 'vue';
 import { opcoesPadrao } from '../src/config/opcoes';
 import type { Armazenamento } from '../src/ext/api';
+import type { Requisicao, Transporte } from '../src/fluxo/executor';
 import { ControleLote } from '../src/lote/ControleLote';
 import { lerAmbiente } from '../src/pje/ambiente';
 import { DESCRICOES_CONHECIDAS } from '../src/regras/tipos';
@@ -96,9 +97,9 @@ beforeEach(() => {
 
 afterEach(() => vi.unstubAllGlobals());
 
-function abrir(armazenamento = memoria()) {
-  const lote = new ControleLote(ambiente, '3.1.0', armazenamento);
-  lote.abrir(opcoesPadrao(true));
+function abrir(armazenamento = memoria(), real?: { transporte: Transporte }) {
+  const lote = new ControleLote(ambiente, '3.1.0', armazenamento, real?.transporte);
+  lote.abrir(real ? { ...opcoesPadrao(true), simulacao: false } : opcoesPadrao(true));
   const raiz = document.getElementById('audaid-v3-lote')!.shadowRoot!;
   const texto = () => raiz.textContent ?? '';
   const botao = (t: RegExp, dentro: ParentNode = raiz) => [...dentro.querySelectorAll('button')].find((b) => t.test(b.textContent?.trim() ?? ''))!;
@@ -237,7 +238,8 @@ describe('Controle em Lote, tela 2 (entrega 2)', () => {
     await p.clicar(p.botao(/^Continuar mesmo assim$/));
     expect(p.texto()).toContain('3. Conferência: 2 audiência(s) em 17/11/2026');
     expect(p.raiz.querySelector('.cabecalho-lote')!.textContent).toContain('Etapa 3 - Conferência');
-    await vi.waitFor(() => expect(p.texto()).toMatch(/Código do lote: AUD-[23456789A-Z]{8}/), { timeout: 2000 });
+    await vi.waitFor(() => expect(p.texto()).toContain('Pauta da sala no PJe'), { timeout: 2000 });
+    expect(p.texto()).toMatch(/Código do lote: AUD-[23456789A-Z]{8}/);
     expect(p.texto()).toContain('Já tem audiência designada no órgão: 20/10/2026 10:10');
     expect(p.texto()).toContain('09:05');
     await p.clicar(p.botao(/^Voltar à pauta$/));
@@ -331,16 +333,16 @@ describe('Tela 3: conferência com a pauta da sala (D28, D32, D65–D67, D78)', 
     expect(p.raiz.querySelector('.achado-vermelho')!.textContent).toContain('0000999-11.2026.5.09.0001 já começa às 09:10 nesta sala');
     expect(p.raiz.querySelector('.achado-amarelo')!.textContent).toContain('0000777-22.2026.5.09.0001 começa às 09:05');
     expect(p.raiz.querySelector('.achado-existente')!.textContent).toContain('Já tem audiência designada no órgão: 20/10/2026 10:10');
-    expect(p.botao(/^Continuar$/).disabled).toBe(true);
+    expect(p.botao(/^Simular a execução$/).disabled).toBe(true);
     expect(p.texto()).toContain('1 conflito(s) vermelho(s) para resolver.');
 
     await p.clicar(p.botao(/^Aplicar$/, p.raiz.querySelector('.achado-vermelho')!));
     expect(inicioNa3(p, N3)).toBe('09:11');
     expect(p.raiz.querySelector('.achado-vermelho')).toBeNull();
     expect(p.raiz.querySelector('.achado-amarelo')).not.toBeNull(); // amarelo só avisa
-    expect(p.botao(/^Continuar$/).disabled).toBe(false);
-    await p.clicar(p.botao(/^Continuar$/));
-    expect(p.texto()).toContain('Tudo conferido.');
+    expect(p.botao(/^Simular a execução$/).disabled).toBe(false);
+    await p.clicar(p.botao(/^Simular a execução$/));
+    await vi.waitFor(() => expect(p.texto()).toContain('Simulação: 2 simulada(s). Nada foi gravado no PJe.'), { timeout: 3000 });
   });
 
   it('"Empurrar" (D65) põe um intervalo com a duração base a partir do processo de fora', async () => {
@@ -352,7 +354,7 @@ describe('Tela 3: conferência com a pauta da sala (D28, D32, D65–D67, D78)', 
     const intervalo = p.raiz.querySelector('tr.resumo-intervalo')!;
     expect(intervalo.textContent).toContain('Intervalo');
     expect(intervalo.textContent).toContain('09:10');
-    expect(p.botao(/^Continuar$/).disabled).toBe(false);
+    expect(p.botao(/^Simular a execução$/).disabled).toBe(false);
     // A mudança vale para a pauta (tela 2) também, e lá a audiência nova aparece, no horário dela.
     await p.clicar(p.botao(/^Voltar à pauta$/));
     expect(p.raiz.querySelectorAll('.linha-intervalo')).toHaveLength(1);
@@ -524,6 +526,127 @@ describe('A pauta do PJe na tela 2 (entrega 5, rodada 15)', () => {
     await vi.waitFor(() => expect(p.texto()).toContain('2. Pauta: 2 processo(s)'));
     await esperarPautaDaTela2(p);
     expect(desenho(p)).toEqual(['vaga@09:00', `${N1}@09:10`, `${N3}@09:20`, '0000999-11.2026.5.09.0001@11:00']);
+  });
+});
+
+describe('Tela 4: execução (entrega 6)', () => {
+  /**
+   * Leituras pelo PJe falso; escritas aceitas, como um envio real. `falharDesignacao`: a
+   * designação é recusada sempre (`true`) ou só a primeira, com PJE-064 (`'pje064'`).
+   */
+  function transporteReal(falharDesignacao: boolean | 'pje064' = false): Transporte & { escritas: Requisicao[] } {
+    const escritas: Requisicao[] = [];
+    let recusou = false;
+    return {
+      simulando: false,
+      escritas,
+      async enviar(r) {
+        if (r.metodo === 'GET') {
+          const resp = responder(`https://pje.trt9.jus.br${r.caminho}`);
+          const texto = await resp.text();
+          return resp.ok ? { ok: true, status: resp.status, dados: texto ? JSON.parse(texto) : null } : { ok: false, status: resp.status, erro: { mensagem: texto } };
+        }
+        escritas.push(r);
+        const designacao = r.caminho.endsWith('/pautasaudiencias/audiencias');
+        if (falharDesignacao === true && designacao) return { ok: false, status: 500, erro: { mensagem: 'PJe fora do ar' } };
+        if (falharDesignacao === 'pje064' && designacao && !recusou) {
+          recusou = true;
+          return { ok: false, status: 400, erro: { mensagem: 'Já existe uma audiência marcada para o horário solicitado.', codigoErro: 'PJE-064' } };
+        }
+        const b = r.corpo as { horarioInicial: string };
+        return { ok: true, status: 200, dados: { id: 9000 + escritas.length, dataInicio: `${DIA}T${b.horarioInicial}:00`, status: 'Designada' } };
+      },
+    };
+  }
+
+  async function irParaConferencia(p: Painel) {
+    await irParaPauta(p);
+    await preencherTopo(p);
+    await esperarPautaDaTela2(p);
+    await p.clicar(p.botao(/^Continuar$/));
+    await vi.waitFor(() => expect(p.texto()).toContain('Pauta da sala no PJe'), { timeout: 2000 });
+  }
+  const linhasExecucao = () => [...document.getElementById('audaid-v3-lote')!.shadowRoot!.querySelectorAll<HTMLElement>('.item-execucao')];
+
+  it('simulação: o resumo e "Simular a execução"; a tela 4 com os passos e as requisições; voltar à conferência', async () => {
+    const p = abrir();
+    await irParaConferencia(p);
+    const confirmacao = p.raiz.querySelector('.confirmacao-lote')!;
+    expect(confirmacao.textContent).toContain('O que a simulação vai mostrar (nada é gravado)');
+    expect(confirmacao.textContent).toContain('1 designação(ões) e 1 redesignação(ões) em 17/11/2026, Sala 01.');
+    expect(p.raiz.querySelector('.faixa-simulacao')!.textContent).toBe('SIMULAÇÃO: nada será gravado no PJe');
+
+    await p.clicar(p.botao(/^Simular a execução$/));
+    await vi.waitFor(() => expect(p.texto()).toContain('Simulação: 2 simulada(s). Nada foi gravado no PJe.'), { timeout: 3000 });
+    expect(p.raiz.querySelector('.cabecalho-lote')!.textContent).toContain('Etapa 4 - Execução - simulação: nada é gravado');
+    expect(linhasExecucao().map((l) => l.querySelector('.selo')!.textContent)).toEqual(['SIMULADO', 'SIMULADO']);
+    await p.clicar(p.botao(/^ver passos$/, linhasExecucao()[1]!));
+    const passos = linhasExecucao()[1]!.querySelector('.passos-execucao')!.textContent!;
+    expect(passos).toContain('Redesignar a audiência');
+    expect(passos).toContain('não enviado (simulação)');
+
+    await p.clicar(p.botao(/^Voltar à conferência$/));
+    expect(p.texto()).toContain('3. Conferência');
+  });
+
+  it('envio real: a confirmação, o rascunho apagado (D69), a falha com "Reprocessar" e o aviso ao fechar', async () => {
+    const mem = memoria();
+    const t = transporteReal(true);
+    const p = abrir(mem, { transporte: t });
+    await irParaConferencia(p);
+    expect(p.raiz.querySelector('.faixa-simulacao')).toBeNull();
+    expect(p.raiz.querySelector('.confirmacao-lote')!.textContent).toContain('Confira o que será gravado no PJe em seu nome');
+    await vi.waitFor(() => expect(mem.dados.has('lote.rascunho.174')).toBe(true), { timeout: 2000 });
+
+    await p.clicar(p.botao(/^Gravar 2 audiência\(s\) no PJe$/));
+    await vi.waitFor(() => expect(p.texto()).toContain('Concluído:'), { timeout: 3000 });
+    expect(p.raiz.querySelector('.cabecalho-lote')!.textContent).toContain('Etapa 4 - Execução - grava no PJe');
+    expect(mem.dados.has('lote.rascunho.174')).toBe(false);
+    // N1 (designação) falhou; N3 (redesignação) gravou.
+    expect(linhasExecucao().map((l) => l.querySelector('.selo')!.textContent)).toEqual(['FALHA', 'OK']);
+    expect(t.escritas.map((r) => `${r.metodo} ${r.caminho.split('/').pop()}`)).toEqual(['POST audiencias', 'PUT redesignacao']);
+    expect(p.botao(/^Reprocessar falhas \(1\)$/)).toBeTruthy();
+    expect(p.botao(/^Recarregar a página$/)).toBeTruthy();
+    expect(p.botao(/^Voltar à conferência$/)).toBeUndefined(); // depois do real, não se volta
+
+    await p.clicar(p.botao(/^×$/));
+    const dialogo = p.raiz.querySelector('dialog.dialogo-fechar')!;
+    expect(dialogo.hasAttribute('open')).toBe(true);
+    expect(dialogo.textContent).toContain('Há 1 pendência(s)');
+    expect(p.lote.aberto).toBe(true);
+    await p.clicar(p.botao(/^Fechar mesmo assim$/, dialogo));
+    expect(p.lote.aberto).toBe(false);
+  });
+
+  it('horário tomado durante a execução (PJE-064): "Encaixar 1 min depois e reprocessar" (D70)', async () => {
+    const t = transporteReal('pje064');
+    const p = abrir(memoria(), { transporte: t });
+    await irParaConferencia(p);
+    await p.clicar(p.botao(/^Gravar 2 audiência\(s\) no PJe$/));
+    await vi.waitFor(() => expect(p.texto()).toContain('Concluído:'), { timeout: 3000 });
+    const n1 = () => linhasExecucao()[0]!;
+    expect(n1().querySelector('.selo')!.textContent).toBe('FALHA');
+    expect(n1().textContent).toContain('Escolha outro horário');
+    await p.clicar(p.botao(/^Encaixar 1 min depois e reprocessar$/, n1()));
+    await vi.waitFor(() => expect(n1().querySelector('.selo')!.textContent).toBe('OK'), { timeout: 3000 });
+    expect(n1().querySelector('.hora-execucao')!.textContent).toBe('09:01');
+    const designacoes = t.escritas.filter((r) => r.caminho.endsWith('/pautasaudiencias/audiencias'));
+    expect(designacoes.map((r) => (r.corpo as { horarioInicial: string }).horarioInicial)).toEqual(['09:00', '09:01']);
+  });
+
+  it('a troca circular não bloqueia mais a tela 3: só avisa, e o resumo a conta (D75)', async () => {
+    const p = abrir();
+    await irParaPauta(p);
+    await preencherTopo(p);
+    await esperarPautaDaTela2(p);
+    // Hoje, N1 está às 09:10 e N3 às 09:00; no plano, N1 vai para 09:00 e N3 para 09:10.
+    pautaDaSala = [deFora('09:10', 1, N1), deFora('09:00', 3, N3)];
+    await p.clicar(p.botao(/^Continuar$/));
+    await vi.waitFor(() => expect(p.texto()).toContain('Pauta da sala no PJe'), { timeout: 2000 });
+    expect(p.raiz.querySelectorAll('.achado-ciclo')).toHaveLength(2);
+    expect(p.raiz.querySelector('.achado-ciclo')!.textContent).toContain('um dos dois vai antes para um minuto livre');
+    expect(p.raiz.querySelector('.confirmacao-lote')!.textContent).toContain('1 troca(s) circular(es)');
+    expect(p.botao(/^Simular a execução$/).disabled).toBe(false);
   });
 });
 
