@@ -155,7 +155,10 @@ export function normalizarOpcoes(bruto: unknown, desenvolvimento: boolean): Opco
 // ── Termos (D22) ────────────────────────────────────────────────────────────────────────────
 
 /** Sobe quando o texto dos termos muda de forma relevante: o aceite anterior deixa de valer. */
-export const VERSAO_TERMOS = 2; // v2 (23/10/2026): menciona a leitura do nome do usuário (variável {eu}, D43)
+// v2 (23/10/2026): menciona a leitura do nome do usuário (variável {eu}, D43).
+// v3 (05/11/2026, 3.1): partes e advogados lidos pelo Lote, as audiências que já estavam na pauta e
+// o rascunho guardado no navegador (D83).
+export const VERSAO_TERMOS = 3;
 
 export interface Aceite {
   versao: number;

@@ -19,15 +19,18 @@ Extensão para **Firefox, Chrome e Edge** que ajuda assistentes de audiência do
 
 ## Estado
 
-**Publicada: versão 3.0.1** (Controle Individual). **Em desenvolvimento: 3.1**, com o Controle em
-Lote. Por enquanto, as telas 1 a 3: colar a lista, conferir quem entra, montar a pauta (horários,
-intervalos, ajustes por processo, GIGS, Auto organizar por conjuntos de regras das Opções), com
-rascunho guardado) e conferi-la com a pauta da sala no PJe (conflitos e resoluções). Ainda sem
-gravar nada. Nas
-versões de desenvolvimento, o **modo simulação vem
-ligado por padrão**: para gravar de verdade, desligue-o nas Opções. No modo real, o painel mostra
-uma faixa de aviso e pede confirmação, com o resumo do que será gravado, antes de cada envio.
+**Publicada: versão 3.0** (Controle Individual) na AMO e **3.0.1** na Chrome Web Store. **Pronta
+para publicar: 3.1**, com o Controle em Lote. Nas versões de desenvolvimento, o **modo simulação
+vem ligado por padrão**: para gravar de verdade, desligue-o nas Opções. No modo real, o AudAid
+mostra uma faixa de aviso e pede confirmação, com o resumo do que será gravado, antes de cada envio.
 
+- **Controle em Lote** (o botão do AudAid fora de um processo, ou o link no Controle Individual): a
+  pauta de um dia inteiro a partir de uma lista colada. Confere quem entra, monta a pauta (pelas
+  vagas da sala ou em sequência, intervalos, ajustes e GIGS por processo, Auto organizar pelas
+  regras das Opções), mostra a pauta da sala no PJe enquanto monta (vagas, audiências já marcadas,
+  conflitos), deixa alterar as audiências que já estavam lá, confere de novo antes de gravar e grava
+  processo a processo, com relatório e reprocessamento das falhas. O rascunho fica guardado no
+  navegador, sem nomes de partes.
 - **Controle Individual** (o botão do AudAid nas telas de processo): designar ou redesignar com
   sala, data (bloqueio por calendário), horário (conferência da pauta), tipo composto, Juízo 100%
   Digital e GIGS. O resultado mostra cada passo. Na simulação, mostra também a requisição que
@@ -79,7 +82,7 @@ PJe.
 | `src/regras/` | regras puras e testadas: calendário (bloqueio de datas), pauta do dia, tipos de audiência, números e partes, ordenação do Auto organizar |
 | `src/componentes/` | base do Vue (montagem no Shadow DOM) e o que o Individual e o Lote compartilham: sala, data, pauta do dia, tipo composto, GIGS, passos da execução |
 | `src/individual/` | painel do Controle Individual (Vue): os `.vue` mostram, e os `.ts` ao lado guardam o estado e as regras |
-| `src/lote/` | Controle em Lote (Vue, 3.1): lista colada, consulta dos processos, "Não incluídos", pauta (`pauta.ts`, regras puras), arrastar e rascunho |
+| `src/lote/` | Controle em Lote (Vue, 3.1): lista colada e consulta dos processos, pauta (`pauta.ts`, regras puras: horários, vagas, audiências de fora), conferência (`conferencia.ts`), execução (`execucao.ts`: a ordem, o estacionamento, o reprocessamento) e rascunho |
 | `src/fluxo/` | executor da designação: passos, transporte (real/simulado), trava de escrita |
 | `src/prova/` | painel de diagnóstico (só leitura) |
 | `src/config/` | opções, termos e posição do botão (puro e testado) |
