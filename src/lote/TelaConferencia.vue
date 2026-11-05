@@ -3,7 +3,8 @@
 // novo e mostra o que mudou desde a tela 2, porque outro servidor pode ter ocupado um horário nesse
 // meio (§6, item 2). Os achados vêm de conferencia.ts; cada conflito tem a dropdown com o padrão e
 // um "Aplicar" (D66), e a tela reavalia tudo depois de cada aplicação (D16). O plano continua sobre
-// a pauta que a tela 2 viu: nada muda sem um clique. O "Continuar" só libera sem vermelho.
+// a pauta que a tela 2 viu: nada muda sem um clique. No fim, o resumo da D71 e o botão que leva à
+// execução ("Simular a execução" ou "Gravar N audiências no PJe"), que só libera sem vermelho.
 import { computed, onMounted, reactive, ref } from 'vue';
 import { nomeSala } from '../componentes/mensagens';
 import { dataBr } from '../regras/gigs';
@@ -61,10 +62,28 @@ const nrDeFora = (chave: string) => {
   return l?.fora?.nrProcesso ?? String(l?.fora?.idProcesso ?? '');
 };
 
-const pronto = ref(false);
-function continuar() {
-  if (!bloqueios.value && entradas.value) pronto.value = true;
-}
+// ── A confirmação (D71) ──
+const resumo = computed(() => props.lote.resumoExecucao);
+const rotuloExecutar = computed(() => {
+  const n = resumo.value?.gravar ?? 0;
+  if (!n) return 'Nada a gravar';
+  return props.lote.simulando ? 'Simular a execução' : `Gravar ${n} audiência(s) no PJe`;
+});
+const podeExecutar = computed(() => Boolean(entradas.value) && !bloqueios.value && (resumo.value?.gravar ?? 0) > 0);
+/** As linhas do resumo agregado. */
+const itensResumo = computed(() => {
+  const r = resumo.value;
+  if (!r) return [];
+  const p = pauta();
+  return [
+    `${r.designacoes} designação(ões) e ${r.redesignacoes} redesignação(ões) em ${p.topo.data ? dataBr(p.topo.data) : '?'}, ${sala.value ? nomeSala(sala.value) : '?'}.`,
+    r.mantidas ? `${r.mantidas} mantida(s): mesmo horário e tipo, nada a fazer.` : '',
+    r.alternaDigital ? `${r.alternaDigital} processo(s) 100% Digital com Julgamento: retira e recoloca o Juízo 100% Digital (o PJe lança dois movimentos em cada).` : '',
+    r.trocasCirculares ? `${r.trocasCirculares} troca(s) circular(es): um processo de cada vai antes para um minuto livre (uma redesignação a mais).` : '',
+    r.gigs ? `GIGS em ${r.gigs} processo(s), no fim.` : 'Sem GIGS.',
+    `Código do lote: ${p.hash}.`,
+  ].filter(Boolean);
+});
 </script>
 
 <template>
@@ -169,18 +188,25 @@ function continuar() {
       <p class="erro-texto aviso-conferencia">{{ aviso }}</p>
     </div>
   </section>
+  <!-- D71, D78: o resumo agregado é a confirmação; a tabela acima é a lista. -->
+  <section v-if="lote.pauta && resumo" :class="['cartao', 'confirmacao-lote', { real: !lote.simulando }]">
+    <div class="cartao-topo">
+      <h2>{{ lote.simulando ? 'O que a simulação vai mostrar (nada é gravado)' : 'Confira o que será gravado no PJe em seu nome' }}</h2>
+    </div>
+    <div class="cartao-corpo">
+      <ul class="itens-resumo">
+        <li v-for="(t, i) in itensResumo" :key="i">{{ t }}</li>
+      </ul>
+    </div>
+  </section>
   <div v-if="lote.pauta" class="rodape-pauta">
-    <button class="acao" type="button" :disabled="!entradas || bloqueios > 0" @click="continuar">Continuar</button>
+    <button :class="['acao', { perigo: !lote.simulando && podeExecutar }]" type="button" :disabled="!podeExecutar" @click="lote.iniciarExecucao()">{{ rotuloExecutar }}</button>
     <ul class="pendencias">
       <li v-if="!entradas && !lote.pauta.erroPauta">Aguarde a consulta da pauta da sala.</li>
       <li v-if="lote.pauta.erroPauta">Não foi possível conferir a pauta da sala: use "Consultar de novo".</li>
       <li v-if="bloqueios">{{ bloqueios }} conflito(s) vermelho(s) para resolver.</li>
+      <li v-if="resumo && !resumo.gravar">Todas as audiências ficam como estão: não há o que gravar.</li>
     </ul>
-  </div>
-  <div v-if="pronto" class="cartao pronto-para-executar">
-    <div class="cartao-corpo ok-texto">
-      Tudo conferido. A execução (tela 4) chega na entrega 6; nada foi gravado no PJe.
-    </div>
   </div>
 </template>
 
@@ -199,7 +225,9 @@ function continuar() {
 .achado-existente { background: #e8f0fe; color: #1a56c4; }
 .texto-achado { flex: 1 1 320px; }
 .aviso-conferencia { min-height: 1.4em; margin: 6px 0 0; font-size: 12px; }
-.pronto-para-executar { border-color: #bfe3c9; }
+.confirmacao-lote .itens-resumo { margin: 0; padding-left: 18px; }
+.confirmacao-lote.real { border: 2px solid #f0a14a; }
+.confirmacao-lote.real .cartao-topo { background: #fffaf3; }
 .resumo-intervalo td { color: var(--cor-suave); font-style: italic; }
 .resumo-fora td { color: #5b2a91; background: #f3ecfb; }
 </style>

@@ -52,7 +52,7 @@ export function rotuloRascunho(salvoEm: string, processos: number): string {
 }
 
 /** A etapa no cabeçalho do Lote: as telas do §2.3. */
-export function rotuloEtapa(tela: 'texto' | 'consultando' | 'pauta' | 'conferencia'): string {
+export function rotuloEtapa(tela: 'texto' | 'consultando' | 'pauta' | 'conferencia' | 'execucao'): string {
   switch (tela) {
     case 'texto':
     case 'consultando':
@@ -61,5 +61,7 @@ export function rotuloEtapa(tela: 'texto' | 'consultando' | 'pauta' | 'conferenc
       return 'Etapa 2 - Formulário';
     case 'conferencia':
       return 'Etapa 3 - Conferência';
+    case 'execucao':
+      return 'Etapa 4 - Execução';
   }
 }

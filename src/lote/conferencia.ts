@@ -5,7 +5,7 @@
 // - Mesmo minuto de início de um processo de fora: vermelho, o PJe recusaria (D28).
 // - Processo de fora começando dentro da janela planejada de um item: amarelo, só aviso (D28).
 // - Horário de outro processo do lote, que vai ser redesignado: só aviso; a execução o tira dali
-//   antes. Troca circular é vermelho (D67).
+//   antes (D67). Troca circular também só avisa: a execução estaciona um deles (D75).
 // - Processo que já tem audiência designada no órgão: a tela oferece redesigná-la (padrão) ou tirar
 //   o processo da lista (D32).
 
@@ -31,8 +31,11 @@ export type Achado =
   | { tipo: 'ciclo'; outro: string; inicio: number }
   | { tipo: 'existente'; antiga: Audiencia };
 
-/** Achados que bloqueiam o "Continuar" (D66). */
-export const BLOQUEIAM: Achado['tipo'][] = ['vermelho', 'ciclo'];
+/**
+ * Achados que bloqueiam a execução (D66). A troca circular deixou de bloquear na entrega 6: a
+ * execução estaciona um dos processos num minuto livre (D75).
+ */
+export const BLOQUEIAM: Achado['tipo'][] = ['vermelho'];
 
 const rotulo = (e: EntradaPauta) => e.nrProcesso ?? String(e.idProcesso);
 

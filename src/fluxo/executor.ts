@@ -96,6 +96,21 @@ export interface PedidoDesignacao {
   eventos: EventoCalendario[];
   /** AAAA-MM-DD: início do prazo do GIGS. */
   hoje: string;
+  /**
+   * Processos que já saíram do horário nesta execução do Lote (D67): a conferência da pauta não
+   * os conta. Na simulação, a pauta não muda; sem isso, a dependência falharia.
+   */
+  ignorarNaPauta?: number[];
+}
+
+/** O GIGS de um processo, sozinho (o Lote lança os GIGS no fim, D75, e os reprocessa à parte). */
+export interface PedidoGigs {
+  idProcesso: number;
+  idOrgaoLogado: number;
+  /** AAAA-MM-DD: início do prazo. */
+  hoje: string;
+  /** Texto já com as variáveis resolvidas. */
+  gigs: { texto: string; prazo: number };
 }
 
 export type EstadoPasso = 'ok' | 'simulado' | 'aviso' | 'erro';
@@ -116,6 +131,19 @@ export interface ResultadoExecucao {
   resumo: string;
   passos: RegistroPasso[];
   acoes: AcaoSugerida[];
+  /** A audiência nova está no processo (ou estaria, na simulação). */
+  designou: boolean;
+  /** O Juízo 100% Digital foi retirado e não voltou: o processo ficou sem ele. */
+  recolocarFalhou: boolean;
+}
+
+/** A audiência designada do órgão logado que seria substituída (D32): a primeira, por data. */
+export function audienciaDoOrgao(audiencias: Audiencia[], idOrgao: number): Audiencia | undefined {
+  return [...audiencias].sort((a, b) => a.dataInicio.localeCompare(b.dataInicio)).find((a) => a.salaFisica?.orgaoJulgador?.id === idOrgao && a.status === 'Designada');
+}
+
+export function paraAntiga(a: Audiencia): AudienciaAntiga {
+  return { id: a.id, dataInicio: a.dataInicio, descricaoTipo: a.tipo?.descricao ?? '?', nomeSala: a.salaFisica?.nome ?? '?' };
 }
 
 // ── Execução ──────────────────────────────────────────────────────────────────────────────
@@ -135,8 +163,8 @@ export async function executarDesignacao(
     passos.push(r);
     aoPasso?.([...passos]);
   };
-  const falha = (resumo: string, acoes: AcaoSugerida[] = []): ResultadoExecucao => ({ desfecho: 'falha', resumo, passos, acoes });
-  const estadoEscrita = (r: RespostaTransporte): EstadoPasso => (r.ok && r.simulado ? 'simulado' : 'ok');
+  let recolocarFalhou = false;
+  const falha = (resumo: string, acoes: AcaoSugerida[] = []): ResultadoExecucao => ({ desfecho: 'falha', resumo, passos, acoes, designou: false, recolocarFalhou });
 
   // 0. Data (D34, D34c): conferida de novo na hora do envio.
   const cls = classificarData(p.data, p.eventos);
@@ -157,7 +185,9 @@ export async function executarDesignacao(
     registrar({ titulo: 'Conferir a pauta do dia', estado: 'erro', requisicao: reqPauta, erro: rPauta.erro });
     return falha('Não foi possível conferir a pauta. Nada foi alterado.');
   }
-  const ocupante = ocupanteDoMinuto(lerPauta(rPauta.dados as PautaDia), p.hora, p.idProcesso);
+  const ignorados = new Set(p.ignorarNaPauta ?? []);
+  const entradas = lerPauta(rPauta.dados as PautaDia).filter((e) => e.idProcesso === undefined || !ignorados.has(e.idProcesso));
+  const ocupante = ocupanteDoMinuto(entradas, p.hora, p.idProcesso);
   if (ocupante) {
     registrar({
       titulo: 'Conferir a pauta do dia',
@@ -235,74 +265,88 @@ export async function executarDesignacao(
 
   // 4. Recolocar o 100% Digital: SEMPRE, mesmo se o passo 3 falhou (D26).
   let pendencia = '';
-  if (precisaAlternar) {
-    // Relê de novo: a designação pode ter mudado o processo. Se a releitura falhar, recoloca assim
-    // mesmo com a leitura de antes da retirada, porque deixar sem o 100% Digital é pior.
-    const rProc = await t.enviar(reqProcesso);
-    const releu = rProc.ok && ehObjeto(rProc.dados);
-    const base = releu ? (rProc.dados as Record<string, unknown>) : processoAtual;
-    const req: Requisicao = { metodo: 'PUT', caminho: caminhosEscrita.juizoDigital(p.idProcesso), corpo: payloadJuizoDigital(base, true) };
-    const r = await t.enviar(req);
-    const aviso = releu ? undefined : 'Não deu para reler o processo; foi usada a leitura de antes da retirada.';
-    if (!r.ok) {
-      pendencia = 'ATENÇÃO: o processo ficou SEM o Juízo 100% Digital. Recoloque pela tela Retificar do PJe.';
-      registrar({ titulo: 'Recolocar o Juízo 100% Digital', estado: 'erro', requisicao: req, erro: r.erro, detalhe: pendencia });
-    } else {
-      registrar({ titulo: 'Recolocar o Juízo 100% Digital', estado: aviso ? 'aviso' : estadoEscrita(r), requisicao: req, detalhe: aviso });
-    }
+  if (precisaAlternar && !(await recolocarJuizoDigital(p.idProcesso, processoAtual, t, registrar))) {
+    recolocarFalhou = true;
+    pendencia = PENDENCIA_SEM_DIGITAL;
   }
 
   if (!designou) return falha([resumoFalha || 'A audiência não foi designada.', pendencia].filter(Boolean).join(' '), acoes);
 
   // 5. GIGS (D29): só depois da audiência designada.
-  if (p.gigs) {
-    let prazo: { dataInicio: string; dataFim: string } | undefined;
-    let gigsOk = true;
-    // Defesa: o painel já impede, mas texto acima do limite do PJe nunca é enviado.
-    if (p.gigs.texto.length > LIMITES.textoGigs) {
-      gigsOk = false;
-      registrar({
-        titulo: 'Lançar o GIGS',
-        estado: 'erro',
-        detalhe: `O texto do GIGS tem ${p.gigs.texto.length} caracteres; o limite do PJe é ${LIMITES.textoGigs}. O GIGS não foi lançado.`,
-      });
-    } else if (p.gigs.prazo > 0) {
-      const reqPrazo: Requisicao = { metodo: 'GET', caminho: caminhosEscrita.retornaPrazo(p.gigs.prazo, p.idOrgaoLogado, p.hoje) };
-      const rPrazo = await t.enviar(reqPrazo);
-      const dataFim = rPrazo.ok ? lerRetornaPrazo(rPrazo.dados) : undefined;
-      if (!dataFim) {
-        gigsOk = false;
-        registrar({
-          titulo: 'Calcular o prazo do GIGS',
-          estado: 'erro',
-          requisicao: reqPrazo,
-          erro: rPrazo.ok ? { mensagem: 'Resposta do retorna-prazo sem data.' } : rPrazo.erro,
-          detalhe: 'O GIGS não foi lançado. Lance pela tela do PJe.',
-        });
-      } else {
-        prazo = { dataInicio: p.hoje, dataFim };
-        registrar({ titulo: 'Calcular o prazo do GIGS', estado: 'ok', requisicao: reqPrazo, detalhe: `${p.gigs.prazo} dia(s) útil(eis): vence em ${dataFim}.` });
-      }
-    }
-    if (gigsOk) {
-      const req: Requisicao = { metodo: 'POST', caminho: caminhosEscrita.gigs(), corpo: payloadGigs({ idProcesso: p.idProcesso, texto: p.gigs.texto, prazo }) };
-      const r = await t.enviar(req);
-      if (!r.ok) {
-        gigsOk = false;
-        registrar({ titulo: 'Lançar o GIGS', estado: 'erro', requisicao: req, erro: r.erro, detalhe: 'O GIGS não foi lançado. Lance pela tela do PJe.' });
-      } else {
-        registrar({ titulo: 'Lançar o GIGS', estado: estadoEscrita(r), requisicao: req });
-      }
-    }
-    if (!gigsOk) pendencia = [pendencia, 'O GIGS não foi lançado.'].filter(Boolean).join(' ');
+  if (p.gigs && !(await lancarGigs({ idProcesso: p.idProcesso, idOrgaoLogado: p.idOrgaoLogado, hoje: p.hoje, gigs: p.gigs }, t, registrar))) {
+    pendencia = [pendencia, 'O GIGS não foi lançado.'].filter(Boolean).join(' ');
   }
 
+  const fim = { passos, acoes, designou: true, recolocarFalhou };
   if (t.simulando) {
     const resumo = `Simulação concluída: nada foi gravado no PJe.${pendencia ? ` Mas: ${pendencia}` : ''}`;
-    return { desfecho: 'simulado', resumo, passos, acoes };
+    return { desfecho: 'simulado', resumo, ...fim };
   }
-  if (pendencia) return { desfecho: 'parcial', resumo: `Audiência ${p.antiga ? 'redesignada' : 'designada'}, mas: ${pendencia}`, passos, acoes };
-  return { desfecho: 'sucesso', resumo: `Audiência ${p.antiga ? 'redesignada' : 'designada'} com sucesso.`, passos, acoes };
+  if (pendencia) return { desfecho: 'parcial', resumo: `Audiência ${p.antiga ? 'redesignada' : 'designada'}, mas: ${pendencia}`, ...fim };
+  return { desfecho: 'sucesso', resumo: `Audiência ${p.antiga ? 'redesignada' : 'designada'} com sucesso.`, ...fim };
+}
+
+const estadoEscrita = (r: RespostaTransporte): EstadoPasso => (r.ok && r.simulado ? 'simulado' : 'ok');
+
+export const PENDENCIA_SEM_DIGITAL = 'ATENÇÃO: o processo ficou SEM o Juízo 100% Digital. Recoloque pela tela Retificar do PJe.';
+
+/**
+ * Recoloca o Juízo 100% Digital (D26). Relê o processo antes, porque a designação pode tê-lo
+ * mudado; se a releitura falhar, recoloca assim mesmo com `reserva` (a leitura de antes da
+ * retirada), porque deixar sem o 100% Digital é pior. `false` = o processo ficou sem ele.
+ */
+export async function recolocarJuizoDigital(idProcesso: number, reserva: Record<string, unknown>, t: Transporte, registrar: (r: RegistroPasso) => void): Promise<boolean> {
+  const rProc = await t.enviar({ metodo: 'GET', caminho: caminhos.processo(idProcesso) });
+  const releu = rProc.ok && ehObjeto(rProc.dados);
+  const base = releu ? (rProc.dados as Record<string, unknown>) : reserva;
+  const req: Requisicao = { metodo: 'PUT', caminho: caminhosEscrita.juizoDigital(idProcesso), corpo: payloadJuizoDigital(base, true) };
+  const r = await t.enviar(req);
+  const aviso = releu ? undefined : 'Não deu para reler o processo; foi usada a leitura de antes da retirada.';
+  if (!r.ok) {
+    registrar({ titulo: 'Recolocar o Juízo 100% Digital', estado: 'erro', requisicao: req, erro: r.erro, detalhe: PENDENCIA_SEM_DIGITAL });
+    return false;
+  }
+  registrar({ titulo: 'Recolocar o Juízo 100% Digital', estado: aviso ? 'aviso' : estadoEscrita(r), requisicao: req, detalhe: aviso });
+  return true;
+}
+
+/** Lança o GIGS (D29), com o prazo calculado pelo PJe. `false` = não foi lançado. */
+export async function lancarGigs(p: PedidoGigs, t: Transporte, registrar: (r: RegistroPasso) => void): Promise<boolean> {
+  let prazo: { dataInicio: string; dataFim: string } | undefined;
+  // Defesa: a tela já impede, mas texto acima do limite do PJe nunca é enviado.
+  if (p.gigs.texto.length > LIMITES.textoGigs) {
+    registrar({
+      titulo: 'Lançar o GIGS',
+      estado: 'erro',
+      detalhe: `O texto do GIGS tem ${p.gigs.texto.length} caracteres; o limite do PJe é ${LIMITES.textoGigs}. O GIGS não foi lançado.`,
+    });
+    return false;
+  }
+  if (p.gigs.prazo > 0) {
+    const reqPrazo: Requisicao = { metodo: 'GET', caminho: caminhosEscrita.retornaPrazo(p.gigs.prazo, p.idOrgaoLogado, p.hoje) };
+    const rPrazo = await t.enviar(reqPrazo);
+    const dataFim = rPrazo.ok ? lerRetornaPrazo(rPrazo.dados) : undefined;
+    if (!dataFim) {
+      registrar({
+        titulo: 'Calcular o prazo do GIGS',
+        estado: 'erro',
+        requisicao: reqPrazo,
+        erro: rPrazo.ok ? { mensagem: 'Resposta do retorna-prazo sem data.' } : rPrazo.erro,
+        detalhe: 'O GIGS não foi lançado. Lance pela tela do PJe.',
+      });
+      return false;
+    }
+    prazo = { dataInicio: p.hoje, dataFim };
+    registrar({ titulo: 'Calcular o prazo do GIGS', estado: 'ok', requisicao: reqPrazo, detalhe: `${p.gigs.prazo} dia(s) útil(eis): vence em ${dataFim}.` });
+  }
+  const req: Requisicao = { metodo: 'POST', caminho: caminhosEscrita.gigs(), corpo: payloadGigs({ idProcesso: p.idProcesso, texto: p.gigs.texto, prazo }) };
+  const r = await t.enviar(req);
+  if (!r.ok) {
+    registrar({ titulo: 'Lançar o GIGS', estado: 'erro', requisicao: req, erro: r.erro, detalhe: 'O GIGS não foi lançado. Lance pela tela do PJe.' });
+    return false;
+  }
+  registrar({ titulo: 'Lançar o GIGS', estado: estadoEscrita(r), requisicao: req });
+  return true;
 }
 
 /** A resposta é mesmo a audiência nova (e não a antiga devolvida pelo PJe, D9b)? */
