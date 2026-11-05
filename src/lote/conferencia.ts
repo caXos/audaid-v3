@@ -22,13 +22,16 @@ export interface ItemParaConferir {
   duracao: number;
   /** Audiência designada no órgão logado, que seria redesignada (D32). */
   antiga?: Audiencia;
+  /** Audiência de fora alterada que sai do horário dela (D81): conta como do lote, mas não é da lista. */
+  deFora?: boolean;
 }
 
 export type Achado =
   | { tipo: 'vermelho'; outro: string; inicio: number }
   | { tipo: 'amarelo'; outro: string; inicio: number }
-  | { tipo: 'do-lote'; outro: string; inicio: number }
-  | { tipo: 'ciclo'; outro: string; inicio: number }
+  /** `outroDeFora`: o outro é uma audiência que já estava na pauta e foi alterada, não um processo da lista. */
+  | { tipo: 'do-lote'; outro: string; inicio: number; outroDeFora?: boolean }
+  | { tipo: 'ciclo'; outro: string; inicio: number; outroDeFora?: boolean }
   | { tipo: 'existente'; antiga: Audiencia };
 
 /**
@@ -78,7 +81,9 @@ export function conferir(itens: ItemParaConferir[], entradas: EntradaPauta[]): M
     const y = dependeDe.get(x.chave);
     if (y) {
       const ocupante = audiencias.find((e) => e.idProcesso === y.idProcesso && paraMinutos(e.hora) === x.inicio)!;
-      achados.push({ tipo: emCiclo(x) ? 'ciclo' : 'do-lote', outro: rotulo(ocupante), inicio: x.inicio });
+      const achado: Extract<Achado, { tipo: 'do-lote' | 'ciclo' }> = { tipo: emCiclo(x) ? 'ciclo' : 'do-lote', outro: rotulo(ocupante), inicio: x.inicio };
+      if (y.deFora) achado.outroDeFora = true;
+      achados.push(achado);
     }
     if (x.antiga) achados.push({ tipo: 'existente', antiga: x.antiga });
     resultado.set(x.chave, achados);

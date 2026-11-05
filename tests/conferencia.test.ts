@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import { conferir, minutoLivreDepois, type ItemParaConferir } from '../src/lote/conferencia';
 import { empurrarItens, paraMinutos, removerSemRecalcularItens, type ItemLote } from '../src/lote/pauta';
+import { textoDoAchado } from '../src/lote/resolucoes';
 import type { Audiencia } from '../src/pje/api';
 import type { EntradaPauta } from '../src/regras/pauta';
 
@@ -37,6 +38,18 @@ describe('horário de outro processo do lote (D67)', () => {
     const r = conferir(itens, [fora('09:00', 1)]);
     expect(tipos(r, 'B')).toEqual(['do-lote']);
     expect(tipos(r, 'A')).toEqual([]);
+  });
+
+  it('o outro é uma audiência de fora alterada (D81): o aviso diz isso, e não "do próprio lote"', () => {
+    // B vai para 09:00, que hoje é da audiência de fora 77, alterada para 10:00.
+    const itens = [{ ...item('fora-77', 77, '10:00'), deFora: true }, item('B', 2, '09:00')];
+    const r = conferir(itens, [fora('09:00', 77)]);
+    const achado = r.get('B')![0]!;
+    expect(achado).toEqual({ tipo: 'do-lote', outro: 'nr-77', inicio: m('09:00'), outroDeFora: true });
+    expect(textoDoAchado(achado)).toBe('nr-77, que já estava na pauta e foi alterada, está neste horário hoje e vai sair dele: na execução, ela é redesignada antes.');
+    // Com um processo da lista, o texto de antes.
+    const doLote = conferir([item('A', 1, '10:00'), item('B', 2, '09:00')], [fora('09:00', 1)]).get('B')![0]!;
+    expect(textoDoAchado(doLote)).toBe('nr-1, do próprio lote, está neste horário hoje e vai sair dele: na execução, ele é redesignado antes.');
   });
 
   it('troca circular é vermelho para os dois', () => {

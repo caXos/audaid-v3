@@ -242,11 +242,11 @@ export function usePauta(ctx: ContextoPauta, inicio: InicioPauta) {
   /** O que a conferência confere: cada audiência do lote com o horário calculado (conferencia.ts). */
   const paraConferir = computed<ItemParaConferir[]>(() => {
     const processos = ctx.processos();
-    return linhasBase.value.flatMap((l) => {
+    return linhasBase.value.flatMap<ItemParaConferir>((l) => {
       // A de fora que sai do horário dela conta como item do lote (D81): ela vai se mover.
       if (l.tipo === 'fora' && l.movida) {
         const item = itens.value[l.indice];
-        return item?.tipo === 'fora' ? [{ chave: l.chave, idProcesso: item.idProcesso, inicio: l.inicio, duracao: l.duracao }] : [];
+        return item?.tipo === 'fora' ? [{ chave: l.chave, idProcesso: item.idProcesso, inicio: l.inicio, duracao: l.duracao, deFora: true }] : [];
       }
       const p = l.tipo === 'processo' ? processos.get(l.chave) : undefined;
       return p ? [{ chave: l.chave, idProcesso: p.id, inicio: l.inicio, duracao: l.duracao, antiga: p.antiga }] : [];
