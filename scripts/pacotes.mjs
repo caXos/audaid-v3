@@ -5,7 +5,7 @@
 
 import webExt from 'web-ext';
 import { execFileSync } from 'node:child_process';
-import { mkdir, readFile, rm } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rm } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -27,8 +27,11 @@ if (!/\b(?:const|let|var) DEV = false\b/.test(opcoes)) {
   process.exit(1);
 }
 
-await rm(destino, { recursive: true, force: true });
+// Só os pacotes desta versão são refeitos: os de outras versões ficam (D84).
 await mkdir(destino, { recursive: true });
+for (const arquivo of await readdir(destino)) {
+  if (arquivo.startsWith(`audaid-${version}-`)) await rm(join(destino, arquivo), { force: true });
+}
 
 for (const navegador of ['firefox', 'chrome']) {
   await webExt.cmd.build(

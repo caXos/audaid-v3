@@ -10,15 +10,15 @@ AudAid
 
 Chrome Web Store: até 132 caracteres. AMO: "Resumo", até 250 caracteres.
 
-> Designe e redesigne audiências no PJe dos TRTs sem sair do processo: horário pela pauta do dia, tipo certo, GIGS e 100% Digital.
+> Designe audiências no PJe dos TRTs sem sair do processo, uma a uma ou a pauta do dia em lote: horário pela pauta, tipo certo, GIGS.
 
-(128 caracteres)
+(131 caracteres)
 
 ## Descrição
 
-O AudAid é uma extensão para assistentes de audiência dos Tribunais Regionais do Trabalho que usam o PJe. Ele traz para a tela do processo o que hoje exige navegar até a pauta: designar e redesignar audiências em poucos cliques, com menos chance de erro.
+O AudAid é uma extensão para assistentes de audiência dos Tribunais Regionais do Trabalho que usam o PJe. Ele traz para a tela do processo o que hoje exige navegar até a pauta: designar e redesignar audiências em poucos cliques, com menos chance de erro, um processo por vez ou a pauta de um dia inteiro.
 
-O QUE FAZ
+CONTROLE INDIVIDUAL (na tela do processo)
 • Designa e redesigna audiências sem sair da tela de Detalhes do Processo.
 • Mostra a pauta do dia da sala e deixa escolher o horário clicando numa vaga; avisa se o horário já está ocupado.
 • Monta o tipo de audiência certo (entre os 27 tipos) a partir de poucas escolhas: tipo base, videoconferência, fase e Semana Nacional. O rito vem da classe do processo.
@@ -27,13 +27,21 @@ O QUE FAZ
 • Cuida do Juízo 100% Digital quando é preciso designar Julgamento.
 • Atua sempre no órgão julgador em que você está logado; audiências de outros órgãos aparecem só para consulta.
 
+CONTROLE EM LOTE (a pauta de um dia inteiro)
+• Cole uma lista de processos em qualquer formato: o AudAid reconhece os números, consulta cada um e mostra quem ficou de fora e por quê.
+• Monte a pauta: horários pelas vagas da sala ou em sequência, intervalos, tipo e GIGS por processo. Arraste para reordenar ou use regras de ordenação (por reclamada, advogado, número do processo, Juízo 100% Digital…).
+• Veja a pauta da sala no PJe enquanto monta: vagas, audiências já marcadas e conflitos de horário, com a solução na própria linha.
+• Ajuste também audiências que já estavam na pauta, com aviso de que pode ser preciso despacho ou intimação.
+• Antes de gravar, confere a pauta de novo e mostra um resumo. Grava processo a processo, na ordem certa, com o resultado de cada passo e o reprocessamento só do que falhou.
+• O rascunho fica guardado no navegador, sem nomes de partes, para retomar depois.
+
 SEGURANÇA
 • Antes de gravar, mostra um resumo do que vai fazer e pede confirmação.
 • Tem modo simulação, que mostra as requisições sem enviar nada.
 • Depois de uma falha, confere o estado real do processo antes de sugerir qualquer coisa.
 
 PRIVACIDADE
-O AudAid age em seu nome no PJe, usando a sessão que você já abriu no navegador, e só conversa com o PJe do seu tribunal. Nenhum dado é enviado a qualquer outro servidor; não há estatística, rastreamento nem publicidade. Política completa: https://caxos.github.io/audaid-v3/privacidade.html
+O AudAid age em seu nome no PJe, usando a sessão que você já abriu no navegador, e só conversa com o PJe do seu tribunal. Nenhum dado é enviado a qualquer outro servidor; não há estatística, rastreamento nem publicidade. No navegador ficam só as suas opções e o rascunho do lote, sem nomes de partes. Política completa: https://caxos.github.io/audaid-v3/privacidade.html
 
 Código público para conferência: https://github.com/caXos/audaid-v3
 

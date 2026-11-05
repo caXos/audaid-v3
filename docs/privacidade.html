@@ -14,7 +14,7 @@
     <img src="audaid.svg" alt="">
     <div>
       <h1>AudAid: política de privacidade</h1>
-      <p>Versão 2 dos termos · vigente desde 23/10/2026 · vale para a extensão AudAid 3.x (Firefox, Chrome e Edge)</p>
+      <p>Versão 3 dos termos · vigente desde a extensão AudAid 3.1 (novembro de 2026) · vale para o AudAid 3.x (Firefox, Chrome e Edge)</p>
     </div>
   </header>
 
@@ -25,7 +25,8 @@
       <li><strong>Ele só conversa com o PJe do seu tribunal.</strong> Nenhum dado é enviado a qualquer outro
         servidor, nem ao autor da extensão.</li>
       <li><strong>Não há coleta, estatística, rastreamento, publicidade nem venda de dados.</strong></li>
-      <li>No seu navegador fica guardado só o que você configura (opções e o aceite dos termos).</li>
+      <li>No seu navegador ficam só as suas opções, o aceite dos termos e, no Controle em Lote, o rascunho
+        do lote, sem nomes de partes.</li>
     </ul>
   </section>
 
@@ -33,7 +34,8 @@
     <h2>O que é o AudAid</h2>
     <p>
       O AudAid é uma extensão de navegador que ajuda assistentes de audiência dos Tribunais Regionais do
-      Trabalho a designar e redesignar audiências no PJe sem sair da tela do processo. Ela funciona
+      Trabalho a designar e redesignar audiências no PJe sem sair da tela do processo, um processo por vez
+      (Controle Individual) ou a pauta de um dia inteiro a partir de uma lista (Controle em Lote). Ela funciona
       apenas nas páginas do PJe dos TRTs (endereços <code>pje.trtN.jus.br</code>,
       <code>pje-homologacao.trtN.jus.br</code> e <code>pje-treinamento.trtN.jus.br</code>).
     </p>
@@ -62,12 +64,19 @@
     <table>
       <tr><th>Lê (como as telas do PJe)</th><th>Grava (só quando você pede e confirma)</th></tr>
       <tr>
-        <td>dados do processo, audiências do processo, salas, pauta do dia da sala, tipos de audiência,
-          calendário de feriados e suspensões do órgão</td>
-        <td>designação ou redesignação de audiência; atividade no GIGS (opcional); retirada e
-          recolocação do Juízo 100% Digital, só para designar audiência de Julgamento</td>
+        <td>dados do processo, audiências do processo, salas, pauta do dia da sala (com as audiências que
+          já estão nela), tipos de audiência, calendário de feriados e suspensões do órgão; no Controle em
+          Lote, também as partes e os advogados de cada processo</td>
+        <td>designação ou redesignação de audiência, inclusive de audiências que já estavam na pauta, quando
+          você as altera no Controle em Lote; atividade no GIGS (opcional); retirada e recolocação do Juízo
+          100% Digital, só para designar audiência de Julgamento</td>
       </tr>
     </table>
+    <p>
+      As partes e os advogados servem só para mostrar a lista do Controle em Lote e para ordená-la pelas
+      regras que você configura. Os nomes ficam na memória da página enquanto ela está aberta e
+      <strong>não são guardados</strong>.
+    </p>
     <p>
       Antes de gravar, o AudAid mostra um resumo do que vai fazer e pede a sua confirmação. Há também um
       <strong>modo simulação</strong>, que mostra as requisições sem enviar nenhuma.
@@ -77,9 +86,15 @@
   <section>
     <h2>O que fica guardado no seu navegador</h2>
     <ul>
-      <li>As suas <strong>opções</strong>: posição e estilo do botão, sugestões de texto do GIGS e o modo
-        simulação.</li>
+      <li>As suas <strong>opções</strong>: posição e estilo do botão, sugestões de texto do GIGS, regras do
+        Auto organizar e o modo simulação.</li>
       <li>A <strong>data e a versão</strong> em que você aceitou os termos de uso.</li>
+      <li>No Controle em Lote, o <strong>rascunho do lote</strong>, um por órgão julgador: números de processo,
+        horários, ajustes, textos de GIGS e as audiências que já estavam na pauta e foram alteradas, sem
+        nomes de partes. Ele permite retomar uma pauta montada e é <strong>apagado quando a gravação real
+        começa</strong>.</li>
+      <li>Também no Controle em Lote, os <strong>últimos valores usados</strong> no topo da pauta (sala, tipo,
+        horário de início, duração, intervalo e GIGS), por órgão julgador.</li>
     </ul>
     <p>
       Esses dados ficam no armazenamento local da extensão, só neste navegador, e não são sincronizados nem
@@ -99,7 +114,7 @@
     <p>
       O uso das informações recebidas pelo AudAid segue a Política de Dados do Usuário da Chrome Web Store,
       incluindo os requisitos de Uso Limitado: os dados são usados apenas para a finalidade única da
-      extensão, que é designar e acompanhar audiências no PJe a pedido do usuário.
+      extensão, que é designar e acompanhar audiências no PJe a pedido do usuário, uma por vez ou em lote.
     </p>
   </section>
 
@@ -107,7 +122,7 @@
     <h2>Permissões pedidas pela extensão</h2>
     <table>
       <tr><th>Permissão</th><th>Para quê</th></tr>
-      <tr><td><code>storage</code></td><td>guardar as suas opções e o aceite dos termos, localmente</td></tr>
+      <tr><td><code>storage</code></td><td>guardar localmente as suas opções, o aceite dos termos e o rascunho do Controle em Lote</td></tr>
       <tr><td>acesso aos sites do PJe dos 24 TRTs (produção, homologação e treinamento)</td><td>mostrar o botão do AudAid nas telas do processo e fazer as requisições ao PJe com a sua sessão</td></tr>
     </table>
   </section>
