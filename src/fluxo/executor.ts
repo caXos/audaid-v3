@@ -298,6 +298,17 @@ export const PENDENCIA_SEM_DIGITAL = 'ATENÇÃO: o processo ficou SEM o Juízo 1
 export async function recolocarJuizoDigital(idProcesso: number, reserva: Record<string, unknown>, t: Transporte, registrar: (r: RegistroPasso) => void): Promise<boolean> {
   const rProc = await t.enviar({ metodo: 'GET', caminho: caminhos.processo(idProcesso) });
   const releu = rProc.ok && ehObjeto(rProc.dados);
+  // Sem reserva (a audiência de fora do Lote não teve o processo lido antes), só com a releitura:
+  // o PUT leva o processo inteiro, e um objeto vazio apagaria os dados dele.
+  if (!releu && !Object.keys(reserva).length) {
+    registrar({
+      titulo: 'Recolocar o Juízo 100% Digital',
+      estado: 'erro',
+      erro: rProc.ok ? { mensagem: 'Resposta inesperada ao reler o processo.' } : rProc.erro,
+      detalhe: `Não deu para reler o processo. ${PENDENCIA_SEM_DIGITAL}`,
+    });
+    return false;
+  }
   const base = releu ? (rProc.dados as Record<string, unknown>) : reserva;
   const req: Requisicao = { metodo: 'PUT', caminho: caminhosEscrita.juizoDigital(idProcesso), corpo: payloadJuizoDigital(base, true) };
   const r = await t.enviar(req);

@@ -18,6 +18,8 @@ const props = defineProps<{ lote: EstadoLote }>();
 
 const lista = ref<HTMLElement | null>(null);
 const editandoGigs = ref<string | null>(null);
+/** "Pôr um GIGS nas alteradas" (D82). */
+const gigsNasAlteradas = ref(false);
 const dialogoNaoIncluidos = ref<{ abrir(): void } | null>(null);
 const dialogoOrdenar = ref<{ abrir(): void; fechar(): void } | null>(null);
 /** Conjunto escolhido na dropdown, à espera da confirmação (D48e). */
@@ -102,6 +104,15 @@ async function moverTeclado(indice: number, passo: number) {
 
     <TopoLote :pauta="lote.pauta" />
 
+    <!-- D76, D82: enquanto houver audiência de fora alterada. -->
+    <div v-if="lote.pauta.alteradas.length" class="faixa-alteradas">
+      <span>
+        <strong>{{ lote.pauta.alteradas.length }} audiência(s) que já estavam na pauta serão alteradas.</strong> Pode ser necessário despacho ou
+        intimação.
+      </span>
+      <button class="acao secundaria pequena" type="button" @click="gigsNasAlteradas = true">Pôr um GIGS nas alteradas</button>
+    </div>
+
     <section class="cartao">
       <div class="cartao-topo">
         <h2>2. Pauta: {{ lote.pauta.quantidade }} processo(s)</h2>
@@ -140,7 +151,7 @@ async function moverTeclado(indice: number, passo: number) {
       <div ref="lista" class="cartao-corpo lista-pauta">
         <template v-for="v in lote.pauta.linhas" :key="v.linha.chave">
           <ItemLote v-if="v.linha.tipo === 'processo'" :vista="v" :pauta="lote.pauta" :arr="arr" @editar-gigs="(c) => (editandoGigs = c)" @mover-teclado="moverTeclado" />
-          <ForaLote v-else-if="v.linha.tipo === 'fora'" :vista="v" :pauta="lote.pauta" :arr="arr" />
+          <ForaLote v-else-if="v.linha.tipo === 'fora'" :vista="v" :pauta="lote.pauta" :arr="arr" @editar-gigs="(c) => (editandoGigs = c)" @mover-teclado="moverTeclado" />
           <VagaLote v-else-if="v.linha.tipo === 'vaga'" :vista="v" :pauta="lote.pauta" />
           <IntervaloLote v-else :vista="v" :pauta="lote.pauta" :arr="arr" @mover-teclado="moverTeclado" />
         </template>
@@ -164,6 +175,13 @@ async function moverTeclado(indice: number, passo: number) {
     </div>
 
     <DialogoGigsItem v-if="editandoGigs" :key="editandoGigs" :pauta="lote.pauta" :chave="editandoGigs" @fechar="editandoGigs = null" />
+    <DialogoGigsItem
+      v-if="gigsNasAlteradas && lote.pauta.alteradas.length"
+      :pauta="lote.pauta"
+      :chave="lote.pauta.alteradas[0]!.linha.chave"
+      alteradas
+      @fechar="gigsNasAlteradas = false"
+    />
   </template>
 </template>
 
@@ -199,6 +217,10 @@ async function moverTeclado(indice: number, passo: number) {
 .aviso-linha.conflito-vermelho { color: var(--cor-erro); }
 .selo-mini.vaga-livre { background: #fde3c4; color: #8a4b00; }
 .selo-mini.ja-na-pauta { background: #e4d6f5; color: #5b2a91; }
+/* D77: a alterada continua roxa, com o selo em laranja forte. */
+.selo-mini.alterada { background: #e8710a; color: #fff; cursor: help; }
+.aviso-linha.alterada-linha { color: #a5520a; }
+.faixa-alteradas { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; border: 2px solid #e8710a; background: #fff4e8; color: #8a3f00; border-radius: 8px; padding: 6px 12px; margin: 0 0 8px; font-size: 12px; }
 .selo-mini.sem-mudanca { background: var(--cor-ok-fundo); color: var(--cor-ok); cursor: help; }
 .pequeno { font-size: 11px; }
 .campo-vaga select { font-size: 12px; max-width: 96px; }

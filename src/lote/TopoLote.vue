@@ -4,17 +4,40 @@
 // Rótulo acima e campos lado a lado (D59): duas linhas de campos e o GIGS na largura toda.
 // "Horários" (D73): pelas vagas da sala, quando o dia tem vaga livre, ou em sequência; pelas
 // vagas, início, duração e intervalo ficam desabilitados, porque as vagas definem os horários.
+// Com audiência de fora editável na lista, o "Aplicar a todos" de tipo, vídeo e GIGS pergunta antes
+// (D76), com "Não, só aos novos" em foco; o da duração aplica sem perguntar, porque não vai ao PJe.
+import { nextTick, ref } from 'vue';
 import CampoData from '../componentes/CampoData.vue';
 import CampoGigs from '../componentes/CampoGigs.vue';
 import CampoSala from '../componentes/CampoSala.vue';
 import CamposEmLinha from '../componentes/CamposEmLinha.vue';
+import Dialogo from '../componentes/Dialogo.vue';
 import { TIPOS_BASE } from '../regras/tipoComposto';
 import type { EstadoPauta } from './estadoPauta';
-import type { ModoHorarios } from './pauta';
+import type { CampoAjustavel, ModoHorarios } from './pauta';
 
 const props = defineProps<{ pauta: EstadoPauta }>();
 const pelasVagas = () => props.pauta.modo === 'vagas';
 const DICA_VAGAS = 'Pelas vagas, os horários vêm das vagas da sala. Para mudar, escolha "em sequência" em Horários.';
+
+const dialogo = ref<{ abrir(): void; fechar(): void } | null>(null);
+const botaoSoNovos = ref<HTMLButtonElement | null>(null);
+const perguntando = ref<CampoAjustavel | null>(null);
+async function aplicarATodos(campo: CampoAjustavel) {
+  if (campo === 'duracao' || !props.pauta.temForaEditavel) {
+    props.pauta.aplicarATodos(campo);
+    return;
+  }
+  perguntando.value = campo;
+  dialogo.value?.abrir();
+  await nextTick();
+  botaoSoNovos.value?.focus();
+}
+function responder(incluirFora: boolean | null) {
+  if (perguntando.value && incluirFora !== null) props.pauta.aplicarATodos(perguntando.value, incluirFora);
+  perguntando.value = null;
+  dialogo.value?.fechar();
+}
 </script>
 
 <template>
@@ -31,7 +54,7 @@ const DICA_VAGAS = 'Pelas vagas, os horários vêm das vagas da sala. Para mudar
               <option value="">— escolha o tipo —</option>
               <option v-for="b in TIPOS_BASE" :key="b" :value="b">{{ b }}</option>
             </select>
-            <button class="acao secundaria pequena" type="button" title="Tirar o tipo ajustado de todos os itens" @click="pauta.aplicarATodos('tipoBase')">Aplicar a todos</button>
+            <button class="acao secundaria pequena" type="button" title="Tirar o tipo ajustado de todos os itens" @click="aplicarATodos('tipoBase')">Aplicar a todos</button>
           </div>
         </div>
         <div class="campo">
@@ -68,7 +91,7 @@ const DICA_VAGAS = 'Pelas vagas, os horários vêm das vagas da sala. Para mudar
           <div class="controles">
             <input v-model.number="pauta.topo.duracao" type="number" min="1" max="600" :disabled="pelasVagas()" :title="pelasVagas() ? `${DICA_VAGAS} A duração base vale só para quem passar das vagas.` : ''" />
             <span class="suave">min</span>
-            <button class="acao secundaria pequena" type="button" :disabled="pelasVagas()" title="Tirar a duração ajustada de todos os itens" @click="pauta.aplicarATodos('duracao')">Aplicar a todos</button>
+            <button class="acao secundaria pequena" type="button" :disabled="pelasVagas()" title="Tirar a duração ajustada de todos os itens" @click="aplicarATodos('duracao')">Aplicar a todos</button>
           </div>
         </div>
         <div class="campo">
@@ -86,17 +109,31 @@ const DICA_VAGAS = 'Pelas vagas, os horários vêm das vagas da sala. Para mudar
             <label class="rotulo-check" title="Processo 100% Digital é sempre por vídeo"
               ><input v-model="pauta.topo.video" type="checkbox" /> por videoconferência</label
             >
-            <button class="acao secundaria pequena" type="button" title="Tirar o vídeo ajustado de todos os itens" @click="pauta.aplicarATodos('video')">Aplicar a todos</button>
+            <button class="acao secundaria pequena" type="button" title="Tirar o vídeo ajustado de todos os itens" @click="aplicarATodos('video')">Aplicar a todos</button>
           </div>
         </div>
       </CamposEmLinha>
       <div class="separador-topo"></div>
       <CampoGigs :estado="pauta.gigsTopo" :dados-variaveis="pauta.dadosComuns" empilhado>
         <template #acoes>
-          <button class="acao secundaria pequena" type="button" title="Tirar o GIGS ajustado de todos os itens" @click="pauta.aplicarATodos('gigs')">Aplicar o GIGS a todos</button>
+          <button class="acao secundaria pequena" type="button" title="Tirar o GIGS ajustado de todos os itens" @click="aplicarATodos('gigs')">Aplicar o GIGS a todos</button>
         </template>
       </CampoGigs>
     </div>
+    <!-- D76: a pergunta, só com audiência de fora editável na lista. -->
+    <Dialogo
+      ref="dialogo"
+      class="dialogo-aplicar-todos"
+      titulo="Aplicar a todos, inclusive aos que já estavam designados?"
+      dica="Nas audiências que já estavam na pauta, tipo e vídeo viram redesignação no mesmo horário, e o GIGS é lançado num processo que não está na sua lista."
+      @close="perguntando = null"
+    >
+      <div class="linha-form">
+        <button class="acao secundaria" type="button" @click="responder(true)">Sim, todos</button>
+        <button ref="botaoSoNovos" class="acao" type="button" @click="responder(false)">Não, só aos novos</button>
+        <button class="acao secundaria" type="button" @click="responder(null)">Cancelar</button>
+      </div>
+    </Dialogo>
   </section>
 </template>
 

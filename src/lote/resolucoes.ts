@@ -35,11 +35,14 @@ const OPCOES: Partial<Record<Achado['tipo'], { valor: Opcao; rotulo: string }[]>
 
 /**
  * As opções de um achado, com o padrão primeiro. Pelas vagas, "Empurrar" não existe: ele põe um
- * intervalo, e os intervalos não valem nesse modo (D73).
+ * intervalo, e os intervalos não valem nesse modo (D73). Na audiência de fora, não há "remover":
+ * tirar da pauta seria cancelar (D75, D81).
  */
-export function opcoesDoAchado(a: Achado, modo: ModoHorarios): { valor: Opcao; rotulo: string }[] {
-  const todas = OPCOES[a.tipo] ?? [];
-  return modo === 'vagas' ? todas.filter((o) => o.valor !== 'empurrar' && o.valor !== 'removerSemRecalcular') : todas;
+export function opcoesDoAchado(a: Achado, modo: ModoHorarios, deFora = false): { valor: Opcao; rotulo: string }[] {
+  let todas = OPCOES[a.tipo] ?? [];
+  if (modo === 'vagas') todas = todas.filter((o) => o.valor !== 'empurrar' && o.valor !== 'removerSemRecalcular');
+  if (deFora) todas = todas.filter((o) => o.valor === 'encaixar' || o.valor === 'subir' || o.valor === 'descer');
+  return todas;
 }
 
 export function textoDoAchado(a: Achado): string {

@@ -11,7 +11,8 @@ export interface DadosVariaveisGigs {
   hora?: string;
   tipo?: string;
   sala?: string;
-  acao?: 'designada' | 'redesignada';
+  /** "mantida": audiência de fora que só ganha GIGS, sem mudar (entrega 7, D82). */
+  acao?: 'designada' | 'redesignada' | 'mantida';
   usuario?: string;
   orgao?: string;
   hash?: string;
@@ -37,7 +38,7 @@ export const VARIAVEIS_GIGS: readonly DefinicaoVariavel[] = [
   },
   { variavel: '{tipo}', descricao: 'tipo da audiência', padrao: /\{\s*tipo\s*\}/gi, valor: (d) => d.tipo },
   { variavel: '{sala}', descricao: 'sala da audiência', padrao: /\{\s*sala\s*\}/gi, valor: (d) => d.sala },
-  { variavel: '{acao}', descricao: '"designada" ou "redesignada"', padrao: /\{\s*a[cç][aã]o\s*\}/gi, valor: (d) => d.acao },
+  { variavel: '{acao}', descricao: '"designada" ou "redesignada" ("mantida" na audiência que já estava na pauta e não muda)', padrao: /\{\s*a[cç][aã]o\s*\}/gi, valor: (d) => d.acao },
   {
     variavel: '{eu}',
     descricao: 'seu nome, como está no PJe (também vale {usuario})',

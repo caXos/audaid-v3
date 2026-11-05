@@ -84,6 +84,16 @@ export interface ItemPauta {
   data?: string;
   poloAtivo?: PoloPauta;
   poloPassivo?: PoloPauta;
+  segredoJustica?: boolean;
+  /** O processo, embutido na pauta (capturas de 19/10/2026): basta para editar a audiência (D81). */
+  processo?: {
+    id?: number;
+    numero?: string;
+    juizoDigital?: boolean;
+    faseProcessual?: string;
+    classeJudicial?: { sigla?: string };
+    orgaoJulgador?: { id?: number; descricao?: string };
+  };
 }
 
 export interface PautaDia {
