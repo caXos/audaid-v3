@@ -1,5 +1,22 @@
 import type { PautaDia, PoloPauta } from '../pje/api';
 
+/**
+ * D80: o horário cai na grade das vagas do dia? O passo é a diferença mais comum entre os horários
+ * do dia (vagas e audiências), contado desde o primeiro. Um encaixe (10:11 numa grade de 10 em 10)
+ * fica fora. Com menos de dois horários, não há grade.
+ */
+export function naGradeDoDia(minuto: number, minutosDoDia: number[]): boolean {
+  const m = [...new Set(minutosDoDia)].sort((a, b) => a - b);
+  if (m.length < 2) return false;
+  const contagem = new Map<number, number>();
+  for (let i = 1; i < m.length; i++) {
+    const d = m[i]! - m[i - 1]!;
+    contagem.set(d, (contagem.get(d) ?? 0) + 1);
+  }
+  const passo = [...contagem].sort((a, b) => b[1] - a[1] || a[0] - b[0])[0]![0];
+  return passo > 0 && (minuto - m[0]!) % passo === 0;
+}
+
 /** A primeira parte de um polo e se há mais, como a pauta do dia traz (D74). */
 export interface PoloResumo {
   nome: string;
@@ -17,6 +34,17 @@ export interface EntradaPauta {
   idTipo?: number;
   poloAtivo?: PoloResumo;
   poloPassivo?: PoloResumo;
+  segredo?: boolean;
+  /** O processo como a pauta o traz (D81): o órgão em que tramita, o 100% Digital, a classe, a fase. */
+  processo?: ProcessoNaPauta;
+}
+
+export interface ProcessoNaPauta {
+  orgaoId?: number;
+  orgaoDescricao?: string;
+  juizoDigital: boolean;
+  faseProcessual?: string;
+  classeSigla?: string;
 }
 
 const lerPolo = (p: PoloPauta | undefined): PoloResumo | undefined =>
@@ -44,6 +72,15 @@ export function lerPauta(pauta: Partial<PautaDia> | null | undefined): EntradaPa
       const passivo = lerPolo(p.poloPassivo);
       if (ativo) e.poloAtivo = ativo;
       if (passivo) e.poloPassivo = passivo;
+      if (typeof p.segredoJustica === 'boolean') e.segredo = p.segredoJustica;
+      const pr = p.processo;
+      if (pr && typeof pr === 'object') {
+        e.processo = { juizoDigital: Boolean(pr.juizoDigital) };
+        if (typeof pr.orgaoJulgador?.id === 'number') e.processo.orgaoId = pr.orgaoJulgador.id;
+        if (typeof pr.orgaoJulgador?.descricao === 'string') e.processo.orgaoDescricao = pr.orgaoJulgador.descricao;
+        if (typeof pr.faseProcessual === 'string') e.processo.faseProcessual = pr.faseProcessual;
+        if (typeof pr.classeJudicial?.sigla === 'string') e.processo.classeSigla = pr.classeJudicial.sigla;
+      }
       return e;
     })
     .sort((a, b) => a.hora.localeCompare(b.hora));

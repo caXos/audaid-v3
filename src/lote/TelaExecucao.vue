@@ -47,6 +47,17 @@ function recarregar() {
       </button>
       <button v-else-if="lote.execucao.pendentes" class="acao" type="button" @click="lote.execucao.continuar()">{{ lote.execucao.rotuloContinuar }}</button>
       <button class="acao secundaria" type="button" :disabled="lote.execucao.estado.executando" @click="lote.execucao.copiar()">{{ lote.execucao.estado.rotuloCopiar }}</button>
+      <!-- D76: para o despacho ou a intimação. -->
+      <button
+        v-if="lote.execucao.temAlteradas"
+        class="acao secundaria"
+        type="button"
+        :disabled="lote.execucao.estado.executando"
+        title="As audiências que já estavam na pauta e mudaram, de → para"
+        @click="lote.execucao.copiarAlteradas()"
+      >
+        {{ lote.execucao.estado.rotuloCopiarAlteradas }}
+      </button>
       <button v-if="lote.simulando" class="acao secundaria" type="button" :disabled="lote.execucao.estado.executando" @click="lote.voltarAConferencia()">Voltar à conferência</button>
     </div>
     <div class="cartao-corpo">
@@ -65,8 +76,11 @@ function recarregar() {
 
       <div v-for="l in lote.execucao.linhas" :key="l.item.chave" :class="['item-execucao', `situacao-${l.situacao}`]">
         <div class="item-execucao-topo">
-          <span class="ordem">{{ l.item.ordem }}</span>
-          <span class="numero">{{ l.item.chave }}</span>
+          <span class="ordem">{{ l.item.deFora ? '' : l.item.ordem }}</span>
+          <span class="numero">{{ l.item.numero }}</span>
+          <span v-if="l.item.deFora" class="selo-mini ja-na-pauta" :title="`Já estava na pauta às ${l.item.deFora.horaOriginal}${l.item.deFora.tipoOriginal ? ` (${l.item.deFora.tipoOriginal})` : ''}`">{{
+            l.item.soGigs ? 'Já na pauta: só o GIGS' : `Já na pauta: de ${l.item.deFora.horaOriginal}`
+          }}</span>
           <span class="hora-execucao">{{ l.item.hora }}</span>
           <span class="tipo-execucao" :title="l.item.descricaoTipo">{{ l.item.descricaoTipo }}</span>
           <span :class="['selo', `selo-${l.situacao}`]">{{ ROTULO_SITUACAO[l.situacao] }}</span>
@@ -113,4 +127,5 @@ function recarregar() {
 .passos-execucao { margin-top: 4px; padding-top: 2px; border-top: 1px dashed #d5dbe3; }
 .acoes-execucao { margin: 4px 0 0; font-size: 12px; }
 .recarregar-lote { align-items: center; }
+.item-execucao .selo-mini.ja-na-pauta { background: #e4d6f5; color: #5b2a91; }
 </style>

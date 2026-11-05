@@ -35,11 +35,14 @@ const OPCOES: Partial<Record<Achado['tipo'], { valor: Opcao; rotulo: string }[]>
 
 /**
  * As opções de um achado, com o padrão primeiro. Pelas vagas, "Empurrar" não existe: ele põe um
- * intervalo, e os intervalos não valem nesse modo (D73).
+ * intervalo, e os intervalos não valem nesse modo (D73). Na audiência de fora, não há "remover":
+ * tirar da pauta seria cancelar (D75, D81).
  */
-export function opcoesDoAchado(a: Achado, modo: ModoHorarios): { valor: Opcao; rotulo: string }[] {
-  const todas = OPCOES[a.tipo] ?? [];
-  return modo === 'vagas' ? todas.filter((o) => o.valor !== 'empurrar' && o.valor !== 'removerSemRecalcular') : todas;
+export function opcoesDoAchado(a: Achado, modo: ModoHorarios, deFora = false): { valor: Opcao; rotulo: string }[] {
+  let todas = OPCOES[a.tipo] ?? [];
+  if (modo === 'vagas') todas = todas.filter((o) => o.valor !== 'empurrar' && o.valor !== 'removerSemRecalcular');
+  if (deFora) todas = todas.filter((o) => o.valor === 'encaixar' || o.valor === 'subir' || o.valor === 'descer');
+  return todas;
 }
 
 export function textoDoAchado(a: Achado): string {
@@ -49,9 +52,13 @@ export function textoDoAchado(a: Achado): string {
     case 'amarelo':
       return `Amarelo: ${a.outro} começa às ${paraHora(a.inicio)}, dentro do horário planejado deste item. O PJe aceita.`;
     case 'do-lote':
-      return `${a.outro}, do próprio lote, está neste horário hoje e vai sair dele: na execução, ele é redesignado antes.`;
+      return a.outroDeFora
+        ? `${a.outro}, que já estava na pauta e foi alterada, está neste horário hoje e vai sair dele: na execução, ela é redesignada antes.`
+        : `${a.outro}, do próprio lote, está neste horário hoje e vai sair dele: na execução, ele é redesignado antes.`;
     case 'ciclo':
-      return `Troca circular com ${a.outro}, do próprio lote (um vai para o horário do outro): na execução, um dos dois vai antes para um minuto livre e depois para o horário final (uma redesignação a mais).`;
+      return a.outroDeFora
+        ? `Troca circular com ${a.outro}, que já estava na pauta e foi alterada (uma vai para o horário da outra): na execução, uma das duas vai antes para um minuto livre e depois para o horário final (uma redesignação a mais).`
+        : `Troca circular com ${a.outro}, do próprio lote (um vai para o horário do outro): na execução, um dos dois vai antes para um minuto livre e depois para o horário final (uma redesignação a mais).`;
     case 'existente': {
       const x = a.antiga;
       return `Já tem audiência designada no órgão: ${formatarDataHora(x.dataInicio)} (${x.tipo?.descricao ?? '?'}, ${x.salaFisica?.nome ?? '?'}).`;

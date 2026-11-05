@@ -156,6 +156,7 @@ export function useLote(
     const p = usePauta(
       {
         origem: ambiente.origem,
+        idOrgao: o.id,
         descricaoOrgao: o.descricao,
         nomeUsuario: sessao.nomeUsuario,
         tipos: d.tipos,

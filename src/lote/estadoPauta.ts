@@ -12,10 +12,11 @@ import { useGigs } from '../componentes/estadoGigs';
 import { avaliarData, nomeSala, resumoPauta, type Mensagem } from '../componentes/mensagens';
 import { usePautaDia } from '../componentes/pautaDia';
 import type { SugestaoGigs } from '../config/opcoes';
-import type { EventoCalendario, Sala, TipoAudiencia } from '../pje/api';
+import type { EventoCalendario, Processo, Sala, TipoAudiencia } from '../pje/api';
 import { pendenciaGigs, resolverVariaveis, type DadosVariaveisGigs } from '../regras/gigs';
 import { nomeDoConjunto, ordenarProcessos, type ConjuntoRegras } from '../regras/organizar';
 import type { EntradaPauta } from '../regras/pauta';
+import { escolhaDaDescricao, estadoVideo } from '../regras/tipoComposto';
 import { avisoHorario } from './apresentacao';
 import { conferir, type Achado, type ItemParaConferir } from './conferencia';
 import {
@@ -39,6 +40,7 @@ import {
   sincronizarFora,
   tipoDoItem,
   type AjustesItem,
+  type AlteracaoFora,
   type CampoAjustavel,
   type GigsLote,
   type ItemLote,
@@ -54,6 +56,8 @@ import type { ProcessoDoLote } from './resolver';
 export interface ContextoPauta {
   /** Origem do PJe, para consultar a pauta do dia da sala. */
   origem: string;
+  /** O órgão logado: só as audiências de fora de processos que tramitam nele são editáveis (D27, D81). */
+  idOrgao: number;
   descricaoOrgao: string;
   nomeUsuario?: string;
   tipos: TipoAudiencia[];
@@ -97,7 +101,16 @@ export interface LinhaVista {
   nestaPauta?: string;
   /** Mesmo dia, sala, horário e tipo que já tinha: a execução não faz nada com ele (D79). */
   semMudanca: boolean;
+  /** Audiência de fora (entrega 7, D81): dá para alterar? Se não, o motivo. */
+  editavel?: boolean;
+  motivoFixa?: string;
+  /** Audiência de fora em outro horário ou com outro tipo que o do PJe (D76, D81). */
+  alterada?: boolean;
+  /** Audiência de fora: como ela está no PJe. */
+  original?: { hora: string; descricaoTipo?: string };
 }
+
+const SEM_GIGS: GigsLote = { opcao: '', texto: '', prazo: 2 };
 
 export function usePauta(ctx: ContextoPauta, inicio: InicioPauta) {
   const salaInicial = ctx.salas.some((s) => s.id === inicio.topo.idSala) ? inicio.topo.idSala : (ctx.salas[0]?.id ?? null);
@@ -190,6 +203,9 @@ export function usePauta(ctx: ContextoPauta, inicio: InicioPauta) {
   watch(
     deFora,
     (mapa) => {
+      // Enquanto a pauta é consultada, as de fora ficam como estão: assim, a alteração que veio
+      // do rascunho espera a pauta chegar para ser conferida (entrega 7).
+      if (!plano.value && pautaCarregando.value) return;
       const fora = [...mapa.values()].map((e) => ({ idProcesso: e.idProcesso!, hora: e.hora }));
       itens.value = sincronizarFora(itens.value, fora, topoCompleto.value);
     },
@@ -197,7 +213,13 @@ export function usePauta(ctx: ContextoPauta, inicio: InicioPauta) {
   );
 
   const temVagaLivre = computed(() => Boolean(plano.value?.some((e) => e.tipo === 'vaga')));
-  const pje = computed<PautaPje | undefined>(() => (plano.value ? montarPautaPje(plano.value, doLote.value, modoEscolhido.value, vagasLivres.value) : undefined));
+  /** As de fora levadas para outro horário: o delas vira vaga se cair na grade (D80). */
+  const saindo = computed(
+    () => new Set(itens.value.flatMap((i) => (i.tipo === 'fora' && horaValida(i.alteracao?.inicio) && i.alteracao!.inicio !== i.inicio ? [i.idProcesso] : []))),
+  );
+  const pje = computed<PautaPje | undefined>(() =>
+    plano.value ? montarPautaPje(plano.value, doLote.value, modoEscolhido.value, vagasLivres.value, saindo.value) : undefined,
+  );
   /** O modo que vale: "pelas vagas" só com vaga livre no dia (D73). */
   const modo = computed<ModoHorarios>(() => pje.value?.modo ?? 'sequencia');
   const intervalosOcultos = computed(() => (modo.value === 'vagas' ? itens.value.filter((i) => i.tipo === 'intervalo').length : 0));
@@ -220,11 +242,81 @@ export function usePauta(ctx: ContextoPauta, inicio: InicioPauta) {
   /** O que a conferência confere: cada audiência do lote com o horário calculado (conferencia.ts). */
   const paraConferir = computed<ItemParaConferir[]>(() => {
     const processos = ctx.processos();
-    return linhasBase.value.flatMap((l) => {
+    return linhasBase.value.flatMap<ItemParaConferir>((l) => {
+      // A de fora que sai do horário dela conta como item do lote (D81): ela vai se mover.
+      if (l.tipo === 'fora' && l.movida) {
+        const item = itens.value[l.indice];
+        return item?.tipo === 'fora' ? [{ chave: l.chave, idProcesso: item.idProcesso, inicio: l.inicio, duracao: l.duracao, deFora: true }] : [];
+      }
       const p = l.tipo === 'processo' ? processos.get(l.chave) : undefined;
       return p ? [{ chave: l.chave, idProcesso: p.id, inicio: l.inicio, duracao: l.duracao, antiga: p.antiga }] : [];
     });
   });
+
+  /** O tipo de uma audiência de fora: o do PJe, ou o escolhido (D81), resolvido como o dos processos. */
+  function tipoDaFora(e: EntradaPauta, alt: AlteracaoFora | undefined, t: Topo): TipoDoItem {
+    const original = escolhaDaDescricao(e.descricaoTipo ?? '');
+    const juizoDigital = Boolean(e.processo?.juizoDigital);
+    if (!alt?.tipoBase && alt?.video === undefined) {
+      const base = original?.base ?? '';
+      return {
+        base,
+        video: original?.video ?? false,
+        videoTravado: base ? !estadoVideo(base, juizoDigital).habilitada : true,
+        descricao: e.descricaoTipo ?? '',
+        tipo: e.idTipo !== undefined ? { id: e.idTipo, descricao: e.descricaoTipo ?? '' } : undefined,
+        pendencia: null,
+      };
+    }
+    const processo: Processo = {
+      id: e.idProcesso!,
+      numero: e.nrProcesso ?? '',
+      juizoDigital,
+      faseProcessual: e.processo?.faseProcessual,
+      classeJudicial: { sigla: e.processo?.classeSigla },
+    };
+    const ajustes: AjustesItem = {};
+    const base = alt.tipoBase ?? original?.base;
+    if (base) ajustes.tipoBase = base;
+    const video = alt.video ?? original?.video;
+    if (video !== undefined) ajustes.video = video;
+    return tipoDoItem(processo, { ...t, semana: original?.semana ?? 'nenhuma' }, ajustes, ctx.tipos);
+  }
+
+  /** A linha de uma audiência de fora (D74, D81, D82). */
+  function vistaDaFora(linha: LinhaPauta, item: Extract<ItemLote, { tipo: 'fora' }> | undefined, avisos: string[], bloqueios: string[]): LinhaVista {
+    const e = deFora.value.get(linha.chave);
+    const base = { linha, item, ajustado: false, semMudanca: false, fora: e, achados: (achados.value.get(linha.chave) ?? []).filter((a) => a.tipo !== 'existente') };
+    if (!e || !item) return { ...base, avisos: [...bloqueios, ...avisos], bloqueios, editavel: false };
+    const original = { hora: e.hora, descricaoTipo: e.descricaoTipo };
+    const editavel = e.processo?.orgaoId === ctx.idOrgao;
+    const motivoFixa = !e.processo
+      ? 'A pauta não trouxe os dados deste processo: não dá para alterar a audiência.'
+      : editavel
+        ? undefined
+        : `Tramita em outro órgão (${e.processo.orgaoDescricao ?? '?'}): não dá para alterar a audiência (D27).`;
+    const t = topoCompleto.value;
+    const tipo = tipoDaFora(e, item.alteracao, t);
+    if (item.alteracao && tipo.pendencia) bloqueios.push(tipo.pendencia);
+    const alterada = linha.inicio !== paraMinutos(e.hora) || (tipo.tipo !== undefined && tipo.tipo.id !== e.idTipo);
+    const valores = item.alteracao?.gigs ?? SEM_GIGS;
+    const lancar = valores.opcao !== '';
+    const texto = resolverVariaveis(valores.texto, { ...dadosComuns(), hora: paraHora(linha.inicio), tipo: tipo.tipo?.descricao, acao: alterada ? 'redesignada' : 'mantida' });
+    const pendencia = pendenciaGigs({ lancar, texto, prazo: valores.prazo });
+    if (pendencia) bloqueios.push(pendencia);
+    return {
+      ...base,
+      tipo,
+      gigs: { valores, lancar, texto, pendencia },
+      ajustado: Boolean(item.alteracao),
+      editavel,
+      motivoFixa,
+      alterada,
+      original,
+      avisos: [...bloqueios, ...base.achados.map(textoDoAchado), ...avisos],
+      bloqueios,
+    };
+  }
   /** Os conflitos com a pauta mais recente: na tela 2, a mesma do plano; na tela 3, a nova. */
   const achados = computed(() => (entradasPje.value ? conferir(paraConferir.value, entradasPje.value) : new Map<string, Achado[]>()));
 
@@ -241,7 +333,7 @@ export function usePauta(ctx: ContextoPauta, inicio: InicioPauta) {
       if (horario) (linha.sinal === 'sobreposto' ? avisos : bloqueios).push(horario);
       // Quem está numa vaga tem a duração dela (até o próximo horário), que não se escolhe.
       if (!linha.naVaga && !duracaoValida(linha.duracao)) bloqueios.push(`A duração deve ser de ${LIMITES_LOTE.duracao.min} a ${LIMITES_LOTE.duracao.max} minutos.`);
-      if (linha.tipo === 'fora') return { ...vazia, fora: deFora.value.get(linha.chave), avisos: [...bloqueios, ...avisos], bloqueios };
+      if (linha.tipo === 'fora') return vistaDaFora(linha, item?.tipo === 'fora' ? item : undefined, avisos, bloqueios);
       if (item?.tipo !== 'processo') return { ...vazia, avisos: [...bloqueios, ...avisos], bloqueios };
 
       const processo = processos.get(item.chave);
@@ -311,14 +403,44 @@ export function usePauta(ctx: ContextoPauta, inicio: InicioPauta) {
     itens.value = itens.value.map((i) => (i.chave === chave ? f(i) : i));
   };
 
+  /**
+   * Muda a alteração de uma audiência de fora (D81). O que volta a ser igual ao PJe deixa de ser
+   * alteração; sem nada, ela volta a ser como está no PJe.
+   */
+  function alterarFora(i: Extract<ItemLote, { tipo: 'fora' }>, f: (a: AlteracaoFora) => AlteracaoFora): ItemLote {
+    const e = deFora.value.get(i.chave);
+    const original = escolhaDaDescricao(e?.descricaoTipo ?? '');
+    const a = f({ ...i.alteracao });
+    if (a.inicio === i.inicio && !a.solta) delete a.inicio;
+    if (a.tipoBase !== undefined && a.tipoBase === original?.base) delete a.tipoBase;
+    if (a.video !== undefined && a.video === original?.video) delete a.video;
+    if (a.gigs && a.gigs.opcao === '') delete a.gigs;
+    const { alteracao: _, ...resto } = i;
+    return Object.keys(a).length ? { ...resto, alteracao: a } : resto;
+  }
+  const foraEditavel = (chave: string) => deFora.value.get(chave)?.processo?.orgaoId === ctx.idOrgao;
+
   function ajustar<K extends CampoAjustavel>(chave: string, campo: K, valor: Topo[K] & AjustesItem[K]) {
-    trocarItem(chave, (i) => (i.tipo === 'processo' ? { ...i, ajustes: definirAjuste(i.ajustes, campo, valor, topoCompleto.value) } : i));
+    trocarItem(chave, (i) => {
+      if (i.tipo === 'processo') return { ...i, ajustes: definirAjuste(i.ajustes, campo, valor, topoCompleto.value) };
+      if (i.tipo !== 'fora') return i;
+      // A duração da de fora só muda o desenho; o resto é alteração (D81), só nas editáveis.
+      if (campo === 'duracao') return { ...i, duracao: valor as number };
+      if (!foraEditavel(chave)) return i;
+      return alterarFora(i, (a) => ({ ...a, [campo]: valor }));
+    });
   }
 
   /** Início editado: vira âncora (D55). Vazio tira a âncora. Pelas vagas, é o "Levar para a vaga" (D73). */
   function definirInicio(chave: string, hora: string) {
     trocarItem(chave, (i) => {
-      if (i.tipo === 'fora') return i;
+      if (i.tipo === 'fora') {
+        if (!foraEditavel(chave)) return i;
+        return alterarFora(i, (a) => {
+          const { inicio: _, solta: __, ...resto } = a;
+          return horaValida(hora) ? { ...resto, inicio: hora } : resto;
+        });
+      }
       if (i.tipo === 'intervalo') {
         const { inicio: _, ...resto } = i;
         return horaValida(hora) ? { ...resto, inicio: hora } : resto;
@@ -332,19 +454,43 @@ export function usePauta(ctx: ContextoPauta, inicio: InicioPauta) {
     trocarItem(chave, (i) => (i.tipo === 'intervalo' ? { ...i, duracao } : i));
   }
 
+  /** "Voltar ao padrão"; na audiência de fora, "Desfazer": volta a ser como está no PJe (D81). */
   function voltarAoPadrao(chave: string) {
-    trocarItem(chave, (i) => (i.tipo === 'processo' ? { ...i, ajustes: {} } : i));
+    trocarItem(chave, (i) => {
+      if (i.tipo === 'processo') return { ...i, ajustes: {} };
+      if (i.tipo !== 'fora') return i;
+      const { alteracao: _, ...resto } = i;
+      return resto;
+    });
   }
 
-  /** Mover à mão (arrastar ou teclado): a dropdown volta para "Ordem manual" (D48e). */
+  /**
+   * Mover à mão (arrastar ou teclado): a dropdown volta para "Ordem manual" (D48e). A audiência de
+   * fora arrastada perde a âncora e passa a seguir a sequência da posição nova (D81).
+   */
   function mover(de: number, para: number) {
     const antes = itens.value;
+    const movido = antes[de];
+    if (movido?.tipo === 'fora' && !foraEditavel(movido.chave)) return;
     itens.value = moverItem(itens.value, de, para);
-    if (itens.value !== antes) {
-      arrastadaAMao.value = true;
-      ordenacao.value = null;
+    if (itens.value === antes) return;
+    arrastadaAMao.value = true;
+    ordenacao.value = null;
+    if (movido?.tipo === 'fora' && modo.value === 'sequencia') {
+      trocarItem(movido.chave, (i) =>
+        i.tipo === 'fora'
+          ? alterarFora(i, (a) => {
+              const { inicio: _, ...resto } = a;
+              return { ...resto, solta: true };
+            })
+          : i,
+      );
     }
   }
+
+  /** As audiências de fora alteradas (D76): a faixa, a lista "de → para" e a execução. */
+  const alteradas = computed(() => linhas.value.filter((l) => l.linha.tipo === 'fora' && l.alterada));
+  const temForaEditavel = computed(() => linhas.value.some((l) => l.linha.tipo === 'fora' && l.editavel));
 
   /**
    * Trocar de posição com o vizinho (D16). Pelas vagas, o vizinho é o processo anterior ou o
@@ -378,8 +524,36 @@ export function usePauta(ctx: ContextoPauta, inicio: InicioPauta) {
     definirDuracaoIntervalo,
     voltarAoPadrao,
     mover,
-    aplicarATodos(campo: CampoAjustavel) {
-      itens.value = aplicarATodos(itens.value, campo);
+    /**
+     * "Aplicar a todos" (D13). Com `incluirFora` ("Sim, todos", D76), o valor do topo vai também
+     * para as audiências de fora editáveis. A duração vale para todas sem perguntar: não vai ao PJe.
+     */
+    aplicarATodos(campo: CampoAjustavel, incluirFora = false) {
+      const t = topoCompleto.value;
+      itens.value = aplicarATodos(itens.value, campo).map((i) => {
+        if (i.tipo !== 'fora') return i;
+        if (campo === 'duracao') {
+          const { duracao: _, ...resto } = i;
+          return resto;
+        }
+        if (!incluirFora || !foraEditavel(i.chave)) return i;
+        if (campo === 'tipoBase' && !t.tipoBase) return i;
+        return alterarFora(i, (a) => ({ ...a, [campo]: campo === 'gigs' ? { ...t.gigs } : t[campo] }));
+      });
+    },
+    alteradas,
+    temForaEditavel,
+    /** "Pôr um GIGS nas alteradas" (D82): o mesmo GIGS em todas as alteradas de uma vez. */
+    aplicarGigsAlteradas(gigs: GigsLote) {
+      const chaves = new Set(alteradas.value.map((l) => l.linha.chave));
+      itens.value = itens.value.map((i) => (i.tipo === 'fora' && chaves.has(i.chave) ? alterarFora(i, (a) => ({ ...a, gigs: { ...gigs } })) : i));
+    },
+    /** As vagas para onde dá para levar um item (D73): as não deixadas livres e o horário fixo dele. */
+    vagasParaLevar(fixo: string): string[] {
+      const vagas = linhas.value.filter((l) => l.linha.tipo === 'vaga' || l.linha.naVaga).map((l) => paraHora(l.linha.inicio));
+      const lista = [...new Set(vagas)].filter((h) => !vagasLivres.value.includes(h) || h === fixo).sort();
+      if (fixo && !lista.includes(fixo)) lista.push(fixo);
+      return lista;
     },
     remover(chave: string) {
       itens.value = itens.value.filter((i) => i.chave !== chave);
@@ -476,13 +650,14 @@ export function usePauta(ctx: ContextoPauta, inicio: InicioPauta) {
     },
     /**
      * O que vai para o rascunho (D18): sem nomes de partes, sem texto colado e sem as audiências de
-     * fora, que vêm da pauta consultada de novo ao retomar.
+     * fora, que vêm da pauta consultada de novo ao retomar (menos as alteradas).
      */
     paraRascunho(): { hash: string; topo: Topo; itens: ItemLote[]; ordenacao?: string; horarios: ModoHorarios; vagasLivres?: string[] } {
       return {
         hash,
         topo: topoCompleto.value,
-        itens: itens.value.filter((i) => i.tipo !== 'fora'),
+        // Só a de fora alterada vai, com a alteração e o horário original (entrega 7).
+        itens: itens.value.filter((i) => i.tipo !== 'fora' || i.alteracao),
         ...(ordenacao.value ? { ordenacao: ordenacao.value } : {}),
         horarios: modoEscolhido.value,
         ...(vagasLivres.value.length ? { vagasLivres: vagasLivres.value } : {}),

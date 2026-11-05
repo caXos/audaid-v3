@@ -11,6 +11,7 @@ import { dataBr } from '../regras/gigs';
 import type { EntradaPauta } from '../regras/pauta';
 import { BLOQUEIAM, mudancasDaPauta, type Achado } from './conferencia';
 import type { EstadoLote } from './estadoLote';
+import type { LinhaVista } from './estadoPauta';
 import { paraHora } from './pauta';
 import { aplicarResolucao, opcoesDoAchado, textoDoAchado, type Opcao } from './resolucoes';
 
@@ -38,8 +39,9 @@ const deFora = computed(() => {
 
 const escolhas = reactive<Record<string, Opcao>>({});
 const chaveEscolha = (chave: string, a: Achado) => `${chave}|${a.tipo}`;
-const opcoes = (a: Achado) => opcoesDoAchado(a, pauta().modo);
-const opcaoDe = (chave: string, a: Achado): Opcao => escolhas[chaveEscolha(chave, a)] ?? opcoes(a)[0]!.valor;
+/** Na audiência de fora (chave `fora-…`), sem "remover" (D81). */
+const opcoes = (a: Achado, chave = '') => opcoesDoAchado(a, pauta().modo, chave.startsWith('fora-'));
+const opcaoDe = (chave: string, a: Achado): Opcao => escolhas[chaveEscolha(chave, a)] ?? opcoes(a, chave)[0]!.valor;
 const aviso = ref('');
 
 function aplicar(chave: string, a: Achado, opcao: Opcao = opcaoDe(chave, a)): boolean {
@@ -62,14 +64,23 @@ const nrDeFora = (chave: string) => {
   return l?.fora?.nrProcesso ?? String(l?.fora?.idProcesso ?? '');
 };
 
+/** A coluna "GIGS" da audiência de fora: alterada, só com GIGS ou sem mudança (D81, D82). */
+function textoFora(l: LinhaVista): string {
+  if (l.alterada) return `Alterada: estava às ${l.original?.hora ?? '?'}${l.gigs?.lancar ? ` · GIGS "${l.gigs.texto}"` : ''}`;
+  if (l.gigs?.lancar) return `Já na pauta: só o GIGS "${l.gigs.texto}"`;
+  return 'Já na pauta: não muda';
+}
+
 // ── A confirmação (D71) ──
 const resumo = computed(() => props.lote.resumoExecucao);
 const rotuloExecutar = computed(() => {
   const n = resumo.value?.gravar ?? 0;
-  if (!n) return 'Nada a gravar';
-  return props.lote.simulando ? 'Simular a execução' : `Gravar ${n} audiência(s) no PJe`;
+  const g = resumo.value?.soGigs ?? 0;
+  if (props.lote.simulando && (n || g)) return 'Simular a execução';
+  if (n) return `Gravar ${n} audiência(s) no PJe`;
+  return g ? `Lançar ${g} GIGS no PJe` : 'Nada a gravar';
 });
-const podeExecutar = computed(() => Boolean(entradas.value) && !bloqueios.value && (resumo.value?.gravar ?? 0) > 0);
+const podeExecutar = computed(() => Boolean(entradas.value) && !bloqueios.value && ((resumo.value?.gravar ?? 0) > 0 || (resumo.value?.soGigs ?? 0) > 0));
 /** As linhas do resumo agregado. */
 const itensResumo = computed(() => {
   const r = resumo.value;
@@ -80,6 +91,8 @@ const itensResumo = computed(() => {
     r.mantidas ? `${r.mantidas} mantida(s): mesmo horário e tipo, nada a fazer.` : '',
     r.alternaDigital ? `${r.alternaDigital} processo(s) 100% Digital com Julgamento: retira e recoloca o Juízo 100% Digital (o PJe lança dois movimentos em cada).` : '',
     r.trocasCirculares ? `${r.trocasCirculares} troca(s) circular(es): um processo de cada vai antes para um minuto livre (uma redesignação a mais).` : '',
+    r.alteradas ? `${r.alteradas} audiência(s) que já estavam na pauta serão alteradas (lista abaixo): pode ser necessário despacho ou intimação.` : '',
+    r.soGigs ? `${r.soGigs} audiência(s) que já estavam na pauta não mudam e só ganham GIGS.` : '',
     r.gigs ? `GIGS em ${r.gigs} processo(s), no fim.` : 'Sem GIGS.',
     `Código do lote: ${p.hash}.`,
   ].filter(Boolean);
@@ -129,13 +142,13 @@ const itensResumo = computed(() => {
         <tbody>
           <template v-for="l in lote.pauta.linhas" :key="l.linha.chave">
             <template v-if="l.linha.tipo === 'vaga'"></template>
-            <tr v-else-if="l.linha.tipo === 'fora'" class="resumo-fora">
+            <tr v-else-if="l.linha.tipo === 'fora'" :class="['resumo-fora', { alterada: l.alterada, 'com-vermelho': (achados.get(l.linha.chave) ?? []).some((a) => BLOQUEIAM.includes(a.tipo)) }]">
               <td></td>
               <td class="numero">{{ nrDeFora(l.linha.chave) }}</td>
               <td>{{ paraHora(l.linha.inicio) }}</td>
               <td>{{ l.linha.duracao }} min</td>
-              <td>{{ l.fora?.descricaoTipo ?? '?' }}</td>
-              <td>Já na pauta: não muda</td>
+              <td>{{ l.tipo?.descricao || l.fora?.descricaoTipo || '?' }}</td>
+              <td :title="l.gigs?.texto">{{ textoFora(l) }}</td>
             </tr>
             <tr v-else-if="l.linha.tipo !== 'processo'" class="resumo-intervalo">
               <td></td>
@@ -155,37 +168,49 @@ const itensResumo = computed(() => {
                   {{ l.semMudanca ? 'sem mudança: nada a fazer' : l.gigs?.lancar ? `"${l.gigs.texto}" · ${l.gigs.valores.prazo > 0 ? `${l.gigs.valores.prazo} d.u.` : 'sem prazo'}` : '—' }}
                 </td>
               </tr>
-              <tr v-for="(a, i) in achados.get(l.linha.chave) ?? []" :key="`${l.linha.chave}-${i}`" class="linha-achado">
-                <td></td>
-                <td colspan="5">
-                  <div :class="['achado', `achado-${a.tipo}`]">
-                    <span class="texto-achado">{{ textoDoAchado(a) }}</span>
-                    <template v-if="opcoes(a).length">
-                      <select
-                        :value="opcaoDe(l.linha.chave, a)"
-                        :aria-label="`Resolução para ${l.linha.chave}`"
-                        @change="escolhas[chaveEscolha(l.linha.chave, a)] = ($event.target as HTMLSelectElement).value as Opcao"
-                      >
-                        <option v-for="o in opcoes(a)" :key="o.valor" :value="o.valor">{{ o.rotulo }}</option>
-                      </select>
-                      <button
-                        class="acao secundaria pequena"
-                        type="button"
-                        :disabled="opcaoDe(l.linha.chave, a) === 'redesignar'"
-                        :title="opcaoDe(l.linha.chave, a) === 'redesignar' ? 'É o padrão: a audiência existente será redesignada na execução' : ''"
-                        @click="aplicar(l.linha.chave, a)"
-                      >
-                        Aplicar
-                      </button>
-                    </template>
-                  </div>
-                </td>
-              </tr>
             </template>
+            <!-- Os achados dos processos e das audiências de fora alteradas. -->
+            <tr v-for="(a, i) in l.linha.tipo === 'processo' || l.linha.tipo === 'fora' ? (achados.get(l.linha.chave) ?? []) : []" :key="`${l.linha.chave}-${i}`" class="linha-achado">
+              <td></td>
+              <td colspan="5">
+                <div :class="['achado', `achado-${a.tipo}`]">
+                  <span class="texto-achado">{{ textoDoAchado(a) }}</span>
+                  <template v-if="opcoes(a, l.linha.chave).length">
+                    <select
+                      :value="opcaoDe(l.linha.chave, a)"
+                      :aria-label="`Resolução para ${l.fora?.nrProcesso ?? l.linha.chave}`"
+                      @change="escolhas[chaveEscolha(l.linha.chave, a)] = ($event.target as HTMLSelectElement).value as Opcao"
+                    >
+                      <option v-for="o in opcoes(a, l.linha.chave)" :key="o.valor" :value="o.valor">{{ o.rotulo }}</option>
+                    </select>
+                    <button
+                      class="acao secundaria pequena"
+                      type="button"
+                      :disabled="opcaoDe(l.linha.chave, a) === 'redesignar'"
+                      :title="opcaoDe(l.linha.chave, a) === 'redesignar' ? 'É o padrão: a audiência existente será redesignada na execução' : ''"
+                      @click="aplicar(l.linha.chave, a)"
+                    >
+                      Aplicar
+                    </button>
+                  </template>
+                </div>
+              </td>
+            </tr>
           </template>
         </tbody>
       </table>
       <p class="erro-texto aviso-conferencia">{{ aviso }}</p>
+      <!-- D76: as audiências que já estavam na pauta e vão mudar, de → para. -->
+      <div v-if="lote.pauta.alteradas.length" class="lista-alteradas">
+        <strong>Audiências que já estavam na pauta e serão alteradas</strong> (pode ser necessário despacho ou intimação):
+        <ul>
+          <li v-for="l in lote.pauta.alteradas" :key="l.linha.chave">
+            <span class="numero">{{ l.fora?.nrProcesso }}</span>: {{ l.original?.hora }} ({{ l.original?.descricaoTipo ?? '?' }}) → {{ paraHora(l.linha.inicio) }} ({{
+              l.tipo?.descricao ?? '?'
+            }})
+          </li>
+        </ul>
+      </div>
     </div>
   </section>
   <!-- D71, D78: o resumo agregado é a confirmação; a tabela acima é a lista. -->
@@ -230,4 +255,8 @@ const itensResumo = computed(() => {
 .confirmacao-lote.real .cartao-topo { background: #fffaf3; }
 .resumo-intervalo td { color: var(--cor-suave); font-style: italic; }
 .resumo-fora td { color: #5b2a91; background: #f3ecfb; }
+.resumo-fora.alterada td { color: #8a3f00; }
+.resumo-fora.com-vermelho td { background: var(--cor-erro-fundo); }
+.lista-alteradas { border: 2px solid #e8710a; background: #fff4e8; color: #8a3f00; border-radius: 8px; padding: 6px 12px; margin-top: 8px; font-size: 12px; }
+.lista-alteradas ul { margin: 4px 0 0; padding-left: 18px; }
 </style>

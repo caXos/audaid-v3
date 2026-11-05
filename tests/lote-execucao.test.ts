@@ -29,6 +29,7 @@ const nr = (id: number) => `0000${String(id).padStart(3, '0')}-00.2026.5.09.0001
 function item(id: number, hora: string, extra: Partial<ItemExecucao> = {}): ItemExecucao {
   return {
     chave: nr(id),
+    numero: nr(id),
     ordem: id,
     idProcesso: id,
     hora,
@@ -100,7 +101,7 @@ describe('resumoDoLote (D71)', () => {
       { hora: '09:10', tipo: 'audiencia', idProcesso: 2 },
       { hora: '09:30', tipo: 'audiencia', idProcesso: 4 },
     ];
-    expect(resumoDoLote(itens, pauta)).toEqual({ gravar: 3, designacoes: 1, redesignacoes: 2, mantidas: 1, alternaDigital: 1, gigs: 1, trocasCirculares: 1 });
+    expect(resumoDoLote(itens, pauta)).toEqual({ gravar: 3, designacoes: 1, redesignacoes: 2, mantidas: 1, alternaDigital: 1, gigs: 1, trocasCirculares: 1, alteradas: 0, soGigs: 0 });
   });
 });
 

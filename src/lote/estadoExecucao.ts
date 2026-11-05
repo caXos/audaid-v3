@@ -69,8 +69,23 @@ export function relatorioDoLote(linhas: LinhaExecucao[], c: Pick<ContextoExecuca
     '',
   ];
   for (const l of linhas) {
-    saida.push(`## ${l.item.ordem}. ${l.item.chave} · ${l.item.hora} · ${l.item.descricaoTipo} · ${ROTULO_SITUACAO[l.situacao]} · ${l.resumo}`);
+    const ordem = l.item.deFora ? `já na pauta (${l.item.deFora.horaOriginal})` : `${l.item.ordem}.`;
+    saida.push(`## ${ordem} ${l.item.numero} · ${l.item.hora} · ${l.item.descricaoTipo} · ${ROTULO_SITUACAO[l.situacao]} · ${l.resumo}`);
     saida.push(...linhasDosPassos(l.estado.passos, c.origem));
+  }
+  return saida.join('\n');
+}
+
+/**
+ * "Copiar as audiências alteradas" (D76): as audiências que já estavam na pauta e mudaram, de → para,
+ * com o resultado, para o despacho ou a intimação.
+ */
+export function textoAlteradas(linhas: LinhaExecucao[], c: Pick<ContextoExecucao, 'data' | 'nomeSala'>): string {
+  const alteradas = linhas.filter((l) => l.item.deFora && !l.item.soGigs);
+  const saida = [`Audiências que já estavam na pauta de ${dataBr(c.data)} (${c.nomeSala}) e foram alteradas pelo AudAid:`];
+  for (const l of alteradas) {
+    const de = l.item.deFora!;
+    saida.push(`- ${l.item.numero}: ${de.horaOriginal}${de.tipoOriginal ? ` (${de.tipoOriginal})` : ''} → ${l.item.hora} (${l.item.descricaoTipo}) · ${ROTULO_SITUACAO[l.situacao]}`);
   }
   return saida.join('\n');
 }
@@ -90,6 +105,7 @@ export function useExecucao(ctx: ContextoExecucao) {
     /** A execução já começou ao menos uma vez (não se volta às telas 2 e 3 depois do real). */
     comecou: false,
     rotuloCopiar: 'Copiar relatório',
+    rotuloCopiarAlteradas: 'Copiar as audiências alteradas',
   });
   const transporte = ctx.transporte ?? transportePje(ctx.origem, () => lerSessao(document.cookie).xsrfToken, ctx.simulacaoNasOpcoes);
 
@@ -164,19 +180,20 @@ export function useExecucao(ctx: ContextoExecucao) {
     await rodar(new Set([chave]));
   }
 
-  async function copiar(): Promise<void> {
-    const texto = relatorioDoLote(linhas.value, ctx);
+  async function copiarTexto(texto: string, rotulo: 'rotuloCopiar' | 'rotuloCopiarAlteradas', padrao: string): Promise<void> {
     try {
       await navigator.clipboard.writeText(texto);
-      estado.rotuloCopiar = 'Copiado!';
+      estado[rotulo] = 'Copiado!';
     } catch {
-      estado.rotuloCopiar = 'Não deu para copiar';
-      console.info('[AudAid] Relatório do lote:\n' + texto);
+      estado[rotulo] = 'Não deu para copiar';
+      console.info(`[AudAid] ${padrao}:\n${texto}`);
     }
     setTimeout(() => {
-      estado.rotuloCopiar = 'Copiar relatório';
+      estado[rotulo] = padrao;
     }, 2000);
   }
+  const copiar = () => copiarTexto(relatorioDoLote(linhas.value, ctx), 'rotuloCopiar', 'Copiar relatório');
+  const copiarAlteradas = () => copiarTexto(textoAlteradas(linhas.value, ctx), 'rotuloCopiarAlteradas', 'Copiar as audiências alteradas');
 
   return reactive({
     simulando: ctx.simulando,
@@ -200,6 +217,8 @@ export function useExecucao(ctx: ContextoExecucao) {
     },
     encaixarEReprocessar,
     copiar,
+    copiarAlteradas,
+    temAlteradas: computed(() => itens.value.some((i) => i.deFora && !i.soGigs)),
   });
 }
 

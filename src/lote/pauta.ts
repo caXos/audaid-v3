@@ -5,7 +5,7 @@
 
 import { LIMITES } from '../config/opcoes';
 import type { Processo, TipoAudiencia } from '../pje/api';
-import type { EntradaPauta } from '../regras/pauta';
+import { naGradeDoDia, type EntradaPauta } from '../regras/pauta';
 import { descricaoTipo, ehSumarissimo, estadoVideo, faseDoProcesso, TIPOS_BASE, type Semana, type TipoBase } from '../regras/tipoComposto';
 import { resolverTipo } from '../regras/tipos';
 
@@ -52,10 +52,21 @@ export type ItemLote =
   | { tipo: 'intervalo'; chave: string; duracao: number; inicio?: string }
   /**
    * Audiência que já estava no dia, de um processo que o usuário não listou (D74): fica no horário
-   * dela e nunca se mexe por tabela. A duração só muda o desenho da pauta; nada vai ao PJe. Vem da
-   * pauta do dia e não vai para o rascunho.
+   * dela (`inicio`, o do PJe) e nunca se mexe por tabela. A duração só muda o desenho da pauta. Vem
+   * da pauta do dia; só vai para o rascunho se tiver sido alterada (entrega 7, D81).
    */
-  | { tipo: 'fora'; chave: string; idProcesso: number; inicio: string; duracao?: number };
+  | { tipo: 'fora'; chave: string; idProcesso: number; inicio: string; duracao?: number; alteracao?: AlteracaoFora };
+
+/** O que o usuário mudou numa audiência de fora (D81, D82). Ausente = como está no PJe. */
+export interface AlteracaoFora {
+  /** Novo horário fixo (âncora, D55), ou a vaga para onde ela foi levada (D73). */
+  inicio?: string;
+  /** Foi arrastada: perdeu a âncora e segue a sequência da posição nova. */
+  solta?: boolean;
+  tipoBase?: TipoBase;
+  video?: boolean;
+  gigs?: GigsLote;
+}
 
 /** Os horários da pauta (D73): pelas vagas da sala ou em sequência a partir do início do topo. */
 export type ModoHorarios = 'vagas' | 'sequencia';
@@ -199,13 +210,18 @@ export interface LinhaPauta {
   alemDasVagas?: boolean;
   /** Só nas vagas: a vaga, e se foi deixada livre. */
   vaga?: VagaDoLote & { deixadaLivre: boolean };
+  /** Audiência de fora que sai do horário dela no PJe (D81). */
+  movida?: boolean;
 }
 
 const minutos = (n: number) => (duracaoValida(n) ? n : 0);
 
-/** Conflitos entre as audiências do próprio lote (os de fora são da conferência, D78). */
+/**
+ * Conflitos entre as audiências do próprio lote, incluídas as de fora que vão sair do horário delas
+ * (os conflitos com quem fica parado são da conferência, D78).
+ */
 function marcarSinais(linhas: LinhaPauta[]): void {
-  const audiencias = linhas.filter((l) => l.tipo === 'processo');
+  const audiencias = linhas.filter((l) => l.tipo === 'processo' || l.movida);
   const peso: Record<SinalHorario, number> = { ok: 0, sobreposto: 1, 'mesmo-minuto': 2, 'apos-meia-noite': 3 };
   const marcar = (l: LinhaPauta, s: SinalHorario) => {
     if (peso[s] > peso[l.sinal]) l.sinal = s;
@@ -243,10 +259,18 @@ export function calcularPauta(itens: ItemLote[], topo: Topo, pje?: PautaPje): Li
 
   itens.forEach((item, indice) => {
     if (item.tipo === 'fora') {
-      const inicio = paraMinutos(item.inicio);
+      const original = paraMinutos(item.inicio);
       const duracao = item.duracao ?? topo.duracao;
-      linhas.push({ tipo: 'fora', chave: item.chave, indice, ordem: 0, inicio, duracao, ancorado: true, sinal: 'ok' });
-      cursor = Math.max(cursor, inicio + minutos(duracao));
+      const fixo = item.alteracao?.inicio;
+      // Alterada (D81): num horário novo (âncora, D55) ou solta, seguindo a sequência.
+      if (horaValida(fixo) || item.alteracao?.solta) {
+        const inicio = horaValida(fixo) ? paraMinutos(fixo) : cursor;
+        linhas.push({ tipo: 'fora', chave: item.chave, indice, ordem: 0, inicio, duracao, ancorado: horaValida(fixo), sinal: 'ok', movida: inicio !== original });
+        cursor = inicio + minutos(duracao);
+        return;
+      }
+      linhas.push({ tipo: 'fora', chave: item.chave, indice, ordem: 0, inicio: original, duracao, ancorado: true, sinal: 'ok' });
+      cursor = Math.max(cursor, original + minutos(duracao));
       return;
     }
     if (item.tipo === 'intervalo') {
@@ -285,8 +309,15 @@ function calcularPelasVagas(itens: ItemLote[], topo: Topo, pje: PautaPje): Linha
   const livres = new Set(pje.livres);
   const minutosDeVaga = new Set(pje.vagas.map((v) => v.minuto));
   const processos = itens.flatMap((item, indice) => (item.tipo === 'processo' ? [{ item, indice }] : []));
+  // A audiência de fora fica no horário dela ou no que foi escolhido para ela (D81).
+  const fora = itens.flatMap((item, indice) => {
+    if (item.tipo !== 'fora') return [];
+    const fixo = item.alteracao?.inicio;
+    const minuto = horaValida(fixo) ? paraMinutos(fixo) : paraMinutos(item.inicio);
+    return [{ item, indice, minuto, movida: minuto !== paraMinutos(item.inicio) }];
+  });
   const inicio = new Map<number, number>();
-  const ocupadas = new Set<number>();
+  const ocupadas = new Set<number>(fora.filter((f) => f.movida).map((f) => f.minuto));
   for (const { item, indice } of processos) {
     if (!horaValida(item.ajustes.inicio)) continue;
     const m = paraMinutos(item.ajustes.inicio);
@@ -304,7 +335,6 @@ function calcularPelasVagas(itens: ItemLote[], topo: Topo, pje: PautaPje): Linha
       ocupadas.add(m);
     }
   }
-  const fora = itens.flatMap((item, indice) => (item.tipo === 'fora' ? [{ item, indice, minuto: paraMinutos(item.inicio) }] : []));
   // Quem passa das vagas: depois do último horário do dia (do PJe ou do lote), com a duração base.
   let cursor = Math.max(pje.ultimo ?? 0, ...inicio.values(), ...fora.map((f) => f.minuto)) + minutos(topo.duracao);
   for (const p of alem) {
@@ -328,8 +358,10 @@ function calcularPelasVagas(itens: ItemLote[], topo: Topo, pje: PautaPje): Linha
     else if (minutosDeVaga.has(m)) linha.naVaga = true;
     linhas.push(linha);
   }
-  for (const { item, indice, minuto } of fora) {
-    linhas.push({ tipo: 'fora', chave: item.chave, indice, ordem: 0, inicio: minuto, duracao: item.duracao ?? topo.duracao, ancorado: true, sinal: 'ok' });
+  for (const { item, indice, minuto, movida } of fora) {
+    const linha: LinhaPauta = { tipo: 'fora', chave: item.chave, indice, ordem: 0, inicio: minuto, duracao: item.duracao ?? topo.duracao, ancorado: true, sinal: 'ok' };
+    if (movida) linha.movida = true;
+    linhas.push(linha);
   }
   for (const v of pje.vagas) {
     if (ocupadas.has(v.minuto)) continue;
@@ -349,8 +381,16 @@ function calcularPelasVagas(itens: ItemLote[], topo: Topo, pje: PautaPje): Linha
  * vagas do lote são as livres e os horários dos processos do próprio lote (`doLote`: idProcesso →
  * número), que vão sair dali ou ficar.
  */
-export function montarPautaPje(entradas: EntradaPauta[], doLote: Map<number, string>, escolhido: ModoHorarios, livres: string[]): PautaPje {
+export function montarPautaPje(
+  entradas: EntradaPauta[],
+  doLote: Map<number, string>,
+  escolhido: ModoHorarios,
+  livres: string[],
+  /** As audiências de fora que saem do horário delas (D81): o horário vira vaga se cair na grade (D80). */
+  saindo: Set<number> = new Set(),
+): PautaPje {
   const modo: ModoHorarios = escolhido === 'vagas' && entradas.some((e) => e.tipo === 'vaga') ? 'vagas' : 'sequencia';
+  const minutosDoDia = entradas.map((e) => paraMinutos(e.hora));
   const porMinuto = new Map<number, VagaDoLote>();
   for (const e of entradas) {
     const minuto = paraMinutos(e.hora);
@@ -360,6 +400,8 @@ export function montarPautaPje(entradas: EntradaPauta[], doLote: Map<number, str
       if (!porMinuto.has(minuto)) porMinuto.set(minuto, vaga);
     } else if (e.idProcesso !== undefined && doLote.has(e.idProcesso)) {
       porMinuto.set(minuto, { ...vaga, doLote: doLote.get(e.idProcesso)! });
+    } else if (e.idProcesso !== undefined && saindo.has(e.idProcesso) && naGradeDoDia(minuto, minutosDoDia)) {
+      porMinuto.set(minuto, { ...vaga, doLote: e.nrProcesso ?? String(e.idProcesso) });
     }
   }
   return {
@@ -579,7 +621,29 @@ function lerItem(v: unknown): ItemLote | null {
     if (horaValida(i['inicio'])) item.inicio = i['inicio'];
     return item;
   }
+  // Só a audiência de fora alterada vai para o rascunho; ao retomar, a alteração só volta se ela
+  // ainda estiver no mesmo horário (sincronizarFora).
+  const id = i['idProcesso'];
+  if (i['tipo'] === 'fora' && typeof id === 'number' && Number.isInteger(id) && i['chave'] === `fora-${id}` && horaValida(i['inicio'])) {
+    const alteracao = lerAlteracao(i['alteracao']);
+    if (!alteracao) return null;
+    const item: Extract<ItemLote, { tipo: 'fora' }> = { tipo: 'fora', chave: i['chave'], idProcesso: id, inicio: i['inicio'], alteracao };
+    if (duracaoValida(i['duracao'])) item.duracao = i['duracao'];
+    return item;
+  }
   return null;
+}
+
+function lerAlteracao(v: unknown): AlteracaoFora | undefined {
+  const a = objeto(v);
+  const alteracao: AlteracaoFora = {};
+  if (horaValida(a['inicio'])) alteracao.inicio = a['inicio'];
+  if (a['solta'] === true) alteracao.solta = true;
+  if (ehTipoBase(a['tipoBase'])) alteracao.tipoBase = a['tipoBase'];
+  if (typeof a['video'] === 'boolean') alteracao.video = a['video'];
+  const gigs = lerGigs(a['gigs']);
+  if (gigs) alteracao.gigs = gigs;
+  return Object.keys(alteracao).length ? alteracao : undefined;
 }
 
 /** O rascunho do órgão, ou `null` se não houver um válido (outro órgão, versão ou formato). */

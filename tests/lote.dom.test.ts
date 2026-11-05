@@ -55,7 +55,11 @@ function responder(url: string): Response {
     // O processo 3 tem outra reclamada, para a ordenação por nome ter efeito.
     if (m[2] === '/partes') return json(id === 3 ? partes3 : partes);
     if (m[2] === '/audiencias') {
-      return json(id === 3 ? [{ id: 777, dataInicio: '2026-10-20T10:10:00', status: 'Designada', tipo: { id: 3, descricao: 'Conciliação em Conhecimento' }, salaFisica: { id: 503, nome: 'Sala 01', orgaoJulgador: { id: 174, descricao: 'CEJUSC' } } }] : []);
+      const sala = { id: 503, nome: 'Sala 01', orgaoJulgador: { id: 174, descricao: 'CEJUSC' } };
+      if (id === 3) return json([{ id: 777, dataInicio: '2026-10-20T10:10:00', status: 'Designada', tipo: { id: 3, descricao: 'Conciliação em Conhecimento' }, salaFisica: sala }]);
+      // A audiência de fora da entrega 7, às 09:30 do dia da pauta.
+      if (id === 999) return json([{ id: 9990, dataInicio: `${DIA}T09:30:00`, status: 'Designada', tipo: { id: 9, descricao: 'Instrução' }, salaFisica: sala }]);
+      return json([]);
     }
     const numero = { 1: N1, 2: N2, 3: N3 }[id];
     // Originário de outra vara, tramitando no CEJUSC: `orgaoJulgador` é o órgão atual.
@@ -647,6 +651,127 @@ describe('Tela 4: execução (entrega 6)', () => {
     expect(p.raiz.querySelector('.achado-ciclo')!.textContent).toContain('um dos dois vai antes para um minuto livre');
     expect(p.raiz.querySelector('.confirmacao-lote')!.textContent).toContain('1 troca(s) circular(es)');
     expect(p.botao(/^Simular a execução$/).disabled).toBe(false);
+  });
+});
+
+describe('Entrega 7: alterar as audiências que já estavam no dia (D74–D77, D80–D82)', () => {
+  const NR = '0000999-11.2026.5.09.0001';
+  const idDe = (descricao: string) => tipos.find((t) => t.descricao === descricao)!.id;
+  /** A audiência de fora às 09:30, uma Instrução, com o processo embutido (D81). */
+  const roxa = (orgao = { id: 174, descricao: 'CEJUSC' }) => ({
+    ...deFora('09:30', 999, NR),
+    tipo: { id: idDe('Instrução'), descricao: 'Instrução' },
+    processo: { id: 999, numero: NR, juizoDigital: false, faseProcessual: 'CONHECIMENTO', classeJudicial: { sigla: 'ATOrd' }, orgaoJulgador: orgao },
+  });
+  const linhaRoxa = (p: Painel) => p.raiz.querySelector<HTMLElement>('.linha-fora')!;
+  const faixa = (p: Painel) => p.raiz.querySelector('.faixa-alteradas');
+
+  async function irParaPautaComRoxa(p: Painel) {
+    await irParaPauta(p);
+    await preencherTopo(p);
+    await esperarPautaDaTela2(p);
+    await vi.waitFor(() => expect(linhaRoxa(p)).not.toBeNull());
+  }
+
+  it('editável direto: mudar o tipo a deixa "Alterada", com a faixa; "Desfazer" volta ao PJe', async () => {
+    pautaDaSala = [roxa()];
+    const p = abrir();
+    await irParaPautaComRoxa(p);
+    expect(linhaRoxa(p).querySelector('.alca')!.textContent).toBe('::');
+    expect(linhaRoxa(p).querySelector('.tipo-resolvido')!.textContent).toBe('Instrução');
+    expect(faixa(p)).toBeNull();
+    await p.mudar(linhaRoxa(p).querySelector<HTMLSelectElement>('.tipo-item select')!, 'Conciliação');
+    expect(linhaRoxa(p).querySelector('.selo-mini.alterada')).not.toBeNull();
+    expect(linhaRoxa(p).querySelector('.tipo-resolvido')!.textContent).toBe('Conciliação em Conhecimento');
+    expect(faixa(p)!.textContent).toContain('1 audiência(s) que já estavam na pauta serão alteradas');
+    await p.clicar(p.botao(/^Desfazer$/, linhaRoxa(p)));
+    expect(linhaRoxa(p).querySelector('.selo-mini.alterada')).toBeNull();
+    expect(faixa(p)).toBeNull();
+  });
+
+  it('de processo que tramita em outro órgão: fica fixa, com o motivo (D27)', async () => {
+    pautaDaSala = [roxa({ id: 49, descricao: '1ª VT DE CASCAVEL' })];
+    const p = abrir();
+    await irParaPautaComRoxa(p);
+    expect(linhaRoxa(p).querySelector('.alca')!.textContent).toBe('');
+    expect(linhaRoxa(p).querySelector('.tipo-item select')).toBeNull();
+    expect(linhaRoxa(p).querySelector('.aviso-linha')!.textContent).toContain('Tramita em outro órgão (1ª VT DE CASCAVEL)');
+  });
+
+  it('arrastar (↑ na alça) tira a âncora; a tela 3 lista "de → para"; a simulação a redesigna', async () => {
+    pautaDaSala = [roxa()];
+    const p = abrir();
+    await irParaPautaComRoxa(p);
+    // N1 09:00, N3 09:10, a roxa às 09:30. Ela sobe para antes do N3 e segue a sequência.
+    const alca = linhaRoxa(p).querySelector<HTMLElement>('.alca')!;
+    alca.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
+    await nextTick();
+    await nextTick();
+    expect(linhaRoxa(p).dataset.inicio).toBe('09:10');
+    expect(linhaRoxa(p).querySelector('.selo-mini.alterada')).not.toBeNull();
+    expect(p.inicios()).toEqual(['09:00', '09:20']);
+
+    await p.clicar(p.botao(/^Continuar$/));
+    await vi.waitFor(() => expect(p.texto()).toContain('Pauta da sala no PJe'), { timeout: 2000 });
+    expect(p.raiz.querySelector('.lista-alteradas')!.textContent).toContain(`${NR}: 09:30 (Instrução) → 09:10 (Instrução)`);
+    expect(p.raiz.querySelector('.confirmacao-lote')!.textContent).toContain('1 audiência(s) que já estavam na pauta serão alteradas');
+
+    await p.clicar(p.botao(/^Simular a execução$/));
+    await vi.waitFor(() => expect(p.texto()).toContain('Simulação: 3 simulada(s)'), { timeout: 3000 });
+    const linha = [...p.raiz.querySelectorAll<HTMLElement>('.item-execucao')].find((l) => l.textContent?.includes(NR))!;
+    expect(linha.textContent).toContain('Já na pauta: de 09:30');
+    await p.clicar(p.botao(/^ver passos$/, linha));
+    expect(linha.querySelector('.passos-execucao')!.textContent).toContain('Redesignar a audiência');
+    expect(p.botao(/^Copiar as audiências alteradas$/)).toBeTruthy();
+  });
+
+  it('"Aplicar a todos" pergunta antes, com "Não, só aos novos" (D76)', async () => {
+    pautaDaSala = [roxa()];
+    const p = abrir();
+    await irParaPautaComRoxa(p);
+    const aplicarTipo = () => [...p.topo().querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Aplicar a todos')!;
+    const dialogo = () => p.raiz.querySelector('dialog.dialogo-aplicar-todos')!;
+    await p.clicar(aplicarTipo());
+    expect(dialogo().hasAttribute('open')).toBe(true);
+    await p.clicar(p.botao(/^Não, só aos novos$/, dialogo()));
+    expect(linhaRoxa(p).querySelector('.selo-mini.alterada')).toBeNull();
+    await p.clicar(aplicarTipo());
+    await p.clicar(p.botao(/^Sim, todos$/, dialogo()));
+    expect(linhaRoxa(p).querySelector('.tipo-resolvido')!.textContent).toBe('Conciliação em Conhecimento');
+    expect(linhaRoxa(p).querySelector('.selo-mini.alterada')).not.toBeNull();
+  });
+
+  it('"Pôr um GIGS nas alteradas" (D82): o mesmo GIGS em todas, com as variáveis de cada uma', async () => {
+    pautaDaSala = [roxa()];
+    const p = abrir();
+    await irParaPautaComRoxa(p);
+    expect(linhaRoxa(p).querySelector('.resumo-gigs')!.textContent).toBe('Sem GIGS'); // começa sem GIGS
+    await p.mudar(linhaRoxa(p).querySelector<HTMLSelectElement>('.tipo-item select')!, 'Conciliação');
+    await p.clicar(p.botao(/^Pôr um GIGS nas alteradas$/));
+    const dialogo = p.raiz.querySelector('dialog.dialogo-gigs-alteradas')!;
+    expect(dialogo.hasAttribute('open')).toBe(true);
+    await p.mudar(dialogo.querySelector('select')!, 'outro');
+    await p.mudar(dialogo.querySelector<HTMLInputElement>('input[type="text"]')!, 'Intimar: {acao} para {hora}');
+    await p.clicar(p.botao(/^Aplicar a todas as alteradas$/, dialogo));
+    expect(linhaRoxa(p).querySelector('.resumo-gigs')!.getAttribute('title')).toBe('Intimar: redesignada para 09:30');
+  });
+
+  it('o rascunho guarda a alteração, e ela volta ao retomar', async () => {
+    pautaDaSala = [roxa()];
+    const mem = memoria();
+    const p = abrir(mem);
+    await irParaPautaComRoxa(p);
+    await p.mudar(linhaRoxa(p).querySelector<HTMLSelectElement>('.tipo-item select')!, 'Conciliação');
+    await vi.waitFor(() => expect(JSON.stringify(mem.dados.get('lote.rascunho.174') ?? {})).toContain('"tipoBase":"Conciliação"'), { timeout: 2000 });
+    expect(JSON.stringify(mem.dados.get('lote.rascunho.174'))).toContain('"chave":"fora-999"');
+    p.lote.fechar();
+    p.lote.abrir(opcoesPadrao(true));
+    await vi.waitFor(() => expect(p.texto()).toContain('Retomar rascunho'));
+    await p.clicar(p.botao(/^Retomar rascunho/));
+    await vi.waitFor(() => expect(p.texto()).toContain('2. Pauta: 2 processo(s)'));
+    await esperarPautaDaTela2(p);
+    await vi.waitFor(() => expect(linhaRoxa(p).querySelector('.selo-mini.alterada')).not.toBeNull());
+    expect(linhaRoxa(p).querySelector('.tipo-resolvido')!.textContent).toBe('Conciliação em Conhecimento');
   });
 });
 

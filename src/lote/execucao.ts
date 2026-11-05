@@ -31,10 +31,12 @@ import { MINUTOS_DO_DIA, paraHora, paraMinutos } from './pauta';
 
 // ── O que vai ser executado ───────────────────────────────────────────────────────────────
 
-/** Um processo do lote na execução. */
+/** Um processo do lote na execução (ou uma audiência de fora alterada, entrega 7). */
 export interface ItemExecucao {
-  /** Número CNJ. */
+  /** Número CNJ (na audiência de fora, `fora-<id>`). */
   chave: string;
+  /** Número CNJ, para mostrar. */
+  numero: string;
   /** Número da audiência na pauta. */
   ordem: number;
   idProcesso: number;
@@ -50,6 +52,10 @@ export interface ItemExecucao {
   /** O pedido da 3.0, sem a antiga (relida na hora) e sem o GIGS (que vai na fase 2). */
   pedido: Omit<PedidoDesignacao, 'antiga' | 'gigs' | 'ignorarNaPauta'>;
   gigs?: { texto: string; prazo: number };
+  /** Audiência que já estava na pauta, de um processo que não está na lista (D76, D81). */
+  deFora?: { horaOriginal: string; tipoOriginal?: string };
+  /** Audiência de fora que não muda e só ganha GIGS (D82). */
+  soGigs?: boolean;
 }
 
 export interface ContextoPedidos {
@@ -62,9 +68,13 @@ export interface ContextoPedidos {
   hoje: string;
 }
 
-/** Os itens da execução, a partir das linhas da tela 2, na ordem da pauta. */
+/**
+ * Os itens da execução, a partir das linhas da tela 2, na ordem da pauta: os processos do lote e as
+ * audiências de fora alteradas ou com GIGS (entrega 7).
+ */
 export function montarPedidos(linhas: LinhaVista[], ctx: ContextoPedidos): ItemExecucao[] {
   return linhas.flatMap((v) => {
+    if (v.linha.tipo === 'fora') return itemDaFora(v, ctx);
     const p = v.processo;
     const tipo = v.tipo?.tipo;
     if (v.linha.tipo !== 'processo' || !p || !tipo) return [];
@@ -73,6 +83,7 @@ export function montarPedidos(linhas: LinhaVista[], ctx: ContextoPedidos): ItemE
     const ehJulgamento = v.tipo?.base === 'Julgamento';
     const item: ItemExecucao = {
       chave: v.linha.chave,
+      numero: v.linha.chave,
       ordem: v.linha.ordem,
       idProcesso: p.id,
       hora,
@@ -97,6 +108,49 @@ export function montarPedidos(linhas: LinhaVista[], ctx: ContextoPedidos): ItemE
     if (v.gigs?.lancar) item.gigs = { texto: v.gigs.texto, prazo: v.gigs.valores.prazo };
     return [item];
   });
+}
+
+/**
+ * Uma audiência de fora na execução: a alterada vira redesignação (D75, D81); a que só ganhou GIGS
+ * não muda (D82). O processo vem da pauta do dia; o 100% Digital é relido na hora (D26). Sem a
+ * leitura do processo na tela 1, não há reserva para recolocar o 100% Digital: o `processoBruto`
+ * vazio faz o recolocar exigir a releitura (`recolocarJuizoDigital`).
+ */
+function itemDaFora(v: LinhaVista, ctx: ContextoPedidos): ItemExecucao[] {
+  const e = v.fora;
+  const tipo = v.tipo?.tipo;
+  if (!e || e.idProcesso === undefined || !v.editavel || !tipo || (!v.alterada && !v.gigs?.lancar)) return [];
+  const hora = paraHora(v.linha.inicio);
+  const juizoDigital = Boolean(e.processo?.juizoDigital);
+  const ehJulgamento = v.tipo?.base === 'Julgamento';
+  const item: ItemExecucao = {
+    chave: v.linha.chave,
+    numero: e.nrProcesso ?? String(e.idProcesso),
+    ordem: 0,
+    idProcesso: e.idProcesso,
+    hora,
+    descricaoTipo: tipo.descricao,
+    mantida: false,
+    redesignacao: true,
+    alternaDigital: juizoDigital && ehJulgamento,
+    deFora: { horaOriginal: e.hora, ...(e.descricaoTipo ? { tipoOriginal: e.descricaoTipo } : {}) },
+    pedido: {
+      idProcesso: e.idProcesso,
+      idOrgaoLogado: ctx.idOrgao,
+      processoBruto: {},
+      juizoDigital,
+      idSala: ctx.idSala,
+      data: ctx.data,
+      hora,
+      idTipoAudiencia: tipo.id,
+      ehJulgamento,
+      eventos: ctx.eventos,
+      hoje: ctx.hoje,
+    },
+  };
+  if (!v.alterada) item.soGigs = true;
+  if (v.gigs?.lancar) item.gigs = { texto: v.gigs.texto, prazo: v.gigs.valores.prazo };
+  return [item];
 }
 
 // ── A ordem (D67, D75) ────────────────────────────────────────────────────────────────────
@@ -184,19 +238,24 @@ export interface ResumoDoLote {
   alternaDigital: number;
   gigs: number;
   trocasCirculares: number;
+  /** Audiências de fora que mudam (D76) e as que só ganham GIGS (D82). */
+  alteradas: number;
+  soGigs: number;
 }
 
 export function resumoDoLote(itens: ItemExecucao[], entradas: EntradaPauta[] = []): ResumoDoLote {
-  const vao = itens.filter((i) => !i.mantida);
+  const vao = itens.filter((i) => !i.mantida && !i.soGigs);
   const { movs, ocupados } = movimentosDe(vao, entradas);
   return {
     gravar: vao.length,
     designacoes: vao.filter((i) => !i.redesignacao).length,
     redesignacoes: vao.filter((i) => i.redesignacao).length,
-    mantidas: itens.length - vao.length,
+    mantidas: itens.filter((i) => i.mantida).length,
     alternaDigital: vao.filter((i) => i.alternaDigital).length,
-    gigs: vao.filter((i) => i.gigs).length,
+    gigs: itens.filter((i) => !i.mantida && i.gigs).length,
     trocasCirculares: ordenarMovimentos(movs, ocupados).filter((e) => e.tipo === 'estacionar').length,
+    alteradas: vao.filter((i) => i.deFora).length,
+    soGigs: itens.filter((i) => i.soGigs).length,
   };
 }
 
@@ -205,6 +264,8 @@ export function resumoDoLote(itens: ItemExecucao[], entradas: EntradaPauta[] = [
 export interface EstadoItem {
   chave: string;
   mantida: boolean;
+  /** Audiência de fora que só ganha GIGS (D82): não há audiência a gravar. */
+  soGigs: boolean;
   /** O que falta: a audiência, recolocar o 100% Digital, o GIGS. */
   pendente: { audiencia: boolean; recolocar: boolean; gigs: boolean };
   /** A audiência já foi tentada ao menos uma vez. */
@@ -228,7 +289,8 @@ export function estadoInicial(item: ItemExecucao): EstadoItem {
   return {
     chave: item.chave,
     mantida: item.mantida,
-    pendente: { audiencia: !item.mantida, recolocar: false, gigs: Boolean(item.gigs) && !item.mantida },
+    soGigs: Boolean(item.soGigs),
+    pendente: { audiencia: !item.mantida && !item.soGigs, recolocar: false, gigs: Boolean(item.gigs) && !item.mantida },
     rodou: false,
     executando: false,
     interrompido: false,
@@ -258,6 +320,14 @@ export const temPendencia = (e: EstadoItem) => !e.mantida && (e.pendente.audienc
 export function situacaoDoItem(e: EstadoItem, simulando: boolean): { situacao: Situacao; resumo: string } {
   if (e.mantida) return { situacao: 'mantida', resumo: 'Mantida: mesmo horário e tipo que já tinha; nada a fazer.' };
   if (e.executando) return { situacao: 'executando', resumo: 'Executando…' };
+  if (e.soGigs) {
+    if (!e.gigsTentado) {
+      if (!e.interrompido) return { situacao: 'aguardando', resumo: 'Aguardando: a audiência não muda; só o GIGS.' };
+      return { situacao: 'nao-executado', resumo: e.sessaoExpirou ? 'Não executado: a sessão do PJe expirou.' : 'Não executado: a execução parou antes do GIGS.' };
+    }
+    if (e.pendente.gigs) return { situacao: 'atencao', resumo: 'A audiência não muda, e o GIGS não foi lançado.' };
+    return simulando ? { situacao: 'simulado', resumo: 'Simulado: a audiência não muda; o GIGS não foi gravado.' } : { situacao: 'ok', resumo: 'A audiência não muda. GIGS lançado.' };
+  }
   if (!e.rodou) {
     if (!e.interrompido) return { situacao: 'aguardando', resumo: 'Aguardando.' };
     return { situacao: 'nao-executado', resumo: e.sessaoExpirou ? 'Não executado: a sessão do PJe expirou.' : 'Não executado: a execução parou antes dele.' };
@@ -329,7 +399,7 @@ export async function executarPendencias(
   const entradas = lerPauta(rPauta.dados as PautaDia);
 
   // Quem já saiu do horário (nesta execução ou numa anterior) não conta na conferência da pauta.
-  const liberados = new Set(itens.filter((i) => !i.mantida && estados[i.chave]!.rodou && !estados[i.chave]!.pendente.audiencia).map((i) => i.idProcesso));
+  const liberados = new Set(itens.filter((i) => !i.mantida && !i.soGigs && estados[i.chave]!.rodou && !estados[i.chave]!.pendente.audiencia).map((i) => i.idProcesso));
   const porChave = new Map(alvo.map((i) => [i.chave, i]));
   const deveParar = () => sessaoExpirada || controle.pararPedido();
 
