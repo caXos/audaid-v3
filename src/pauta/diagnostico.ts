@@ -9,6 +9,7 @@
 
 import { caminhos, type EventoCalendario, type ItemPauta, type PautaDia, type Sala } from '../pje/api';
 import type { Resposta } from '../pje/http';
+import { lerAud4, resumo, type LeitorPauta } from './dados';
 import { diaDaSemana } from '../regras/calendario';
 import { formatarData } from '../ui/dom';
 import {
@@ -32,8 +33,7 @@ export interface PassoDiagnostico {
   linhas: string[];
 }
 
-/** Leitura no PJe, relativa à origem. `bearer` manda o `access_token` como Authorization (AUD4). */
-export type LeitorPauta = <T>(caminho: string, opcoes?: { bearer?: boolean }) => Promise<Resposta<T>>;
+export type { LeitorPauta };
 
 /** Quantos dias úteis da pauta do dia são lidos por órgão, a partir de hoje. */
 export const DIAS_LIDOS = 8;
@@ -42,19 +42,7 @@ export const PERIODO_AUD4 = 30;
 
 const SEMANA = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
 
-export function resumo(r: Resposta<unknown>): string {
-  return r.ok ? `${r.status} em ${r.ms} ms` : `ERRO ${r.status || 'rede'} em ${r.ms} ms: ${r.erro.mensagem}`;
-}
-
 const ehObjeto = (v: unknown): v is Record<string, unknown> => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
-
-/** AUD4: primeiro só com os cookies; se não vier JSON válido, de novo com o token como Bearer. */
-async function lerAud4<T>(ler: LeitorPauta, caminho: string): Promise<{ r: Resposta<T>; linhas: string[] }> {
-  const soCookies = await ler<T>(caminho);
-  if (soCookies.ok) return { r: soCookies, linhas: [`só com os cookies: ${resumo(soCookies)}`] };
-  const comBearer = await ler<T>(caminho, { bearer: true });
-  return { r: comBearer, linhas: [`só com os cookies: ${resumo(soCookies)}`, `com o token (Bearer): ${resumo(comBearer)}`] };
-}
 
 export interface ResultadoGeral {
   passos: PassoDiagnostico[];

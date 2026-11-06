@@ -12,8 +12,8 @@ import { CONJUNTOS_PADRAO, nomeDoConjunto } from '../src/regras/organizar';
 
 const copia = <T>(x: T): T => JSON.parse(JSON.stringify(x)) as T;
 
-function apiFalsa() {
-  let opcoes = opcoesPadrao(true);
+function apiFalsa(inicial: Opcoes = opcoesPadrao(true)) {
+  let opcoes = copia(inicial);
   let aceite: Aceite | null = novoAceite(new Date(2026, 9, 22, 10, 0));
   let aoMudar = () => {};
   const salvas: Opcoes[] = [];
@@ -150,5 +150,36 @@ describe('Opções em Vue: Auto organizar (D48, D64)', () => {
     await vi.waitFor(() => expect(conjuntos()).toHaveLength(5));
     expect(ultimaSalva()).toEqual(opcoesPadrao(true));
     await vi.waitFor(() => expect(texto()).toContain('Opções padrão restauradas.'));
+  });
+});
+
+describe('Opções da Pauta (3.2)', () => {
+  it('sem órgãos conhecidos, explica que a lista vem da Pauta; meses à frente salva limitado', async () => {
+    expect(texto()).toContain('Abra a Pauta uma vez no PJe');
+    await mudar(alvo.querySelector<HTMLInputElement>('#meses-a-frente')!, '20');
+    await vi.waitFor(() => expect(ultimaSalva().pauta.mesesAFrente).toBe(12));
+  });
+
+  it('"Ocultar da Pauta" marca e desmarca órgãos conhecidos (D87b)', async () => {
+    const inicial = opcoesPadrao(true);
+    inicial.pauta.orgaos = [
+      { id: 174, rotulo: 'CEJUSC-CSC · 3603', nome: 'CEJUSC - JT - CASCAVEL' },
+      { id: 49, rotulo: '1 VTCSV · 0071', nome: '01ª VARA DO TRABALHO DE CASCAVEL' },
+    ];
+    inicial.pauta.ocultos = [49];
+    document.body.replaceChildren();
+    api = apiFalsa(inicial);
+    alvo = document.createElement('div');
+    document.body.append(alvo);
+    montarNaPagina(PaginaOpcoes, { api: api.api, desenvolvimento: true, versao: '3.2.0' }, alvo);
+    await vi.waitFor(() => expect(texto()).toContain('Ocultar da Pauta: 1 VTCSV · 0071'));
+    const caixas = [...alvo.querySelectorAll<HTMLInputElement>('section input[type="checkbox"]')].filter((c) => c.parentElement?.textContent?.includes('Ocultar da Pauta'));
+    expect(caixas.map((c) => c.checked)).toEqual([false, true]);
+    caixas[0]!.checked = true;
+    caixas[0]!.dispatchEvent(new Event('change'));
+    await vi.waitFor(() => expect(ultimaSalva().pauta.ocultos).toEqual([49, 174]));
+    caixas[1]!.checked = false;
+    caixas[1]!.dispatchEvent(new Event('change'));
+    await vi.waitFor(() => expect(ultimaSalva().pauta.ocultos).toEqual([174]));
   });
 });

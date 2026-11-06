@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Página de Opções (§2.6), em Vue desde a 3.1 (D50a): botão, sugestões de GIGS, Auto organizar
-// (D48), termos e diagnóstico. O visual é o de antes (paginas.css); ações são botões (D62).
+// (D48), Pauta (3.2), termos e diagnóstico. O visual é o de antes (paginas.css); ações são botões (D62).
 import { computed, ref } from 'vue';
 import { opcoesPadrao } from '../../config/opcoes';
 import { useOpcoes, type ApiOpcoes, type PedidoConfirmacao, type Trecho } from '../estadoOpcoes';
@@ -8,6 +8,7 @@ import DialogoConfirmacao from './DialogoConfirmacao.vue';
 import SecaoBotao from './SecaoBotao.vue';
 import SecaoGigs from './SecaoGigs.vue';
 import SecaoOrganizar from './SecaoOrganizar.vue';
+import SecaoPauta from './SecaoPauta.vue';
 
 const props = defineProps<{ api: ApiOpcoes; desenvolvimento: boolean; versao: string }>();
 /** URL relativa à página: com `src` fixo, o compilador do Vue tentaria importar o arquivo. */
@@ -56,6 +57,7 @@ async function restaurar() {
         n('Os que você criou ou editou serão apagados'),
         t(` (hoje você tem ${plural(conjuntos, 'conjunto', 'conjuntos')}).`),
       ],
+      [n('Pauta:'), t(` ${padrao.pauta.mesesAFrente} meses à frente e nenhum órgão oculto.`)],
       [n('Modo simulação:'), t(` volta ao padrão desta versão (${padrao.simulacao ? 'ligado' : 'desligado'}).`)],
       [t('O aceite dos termos não muda.')],
     ],
@@ -79,6 +81,7 @@ async function restaurar() {
       <SecaoBotao :opcoes="estado.opcoes" />
       <SecaoGigs :opcoes="estado.opcoes" />
       <SecaoOrganizar :opcoes="estado.opcoes" />
+      <SecaoPauta :opcoes="estado.opcoes" />
     </template>
 
     <section>

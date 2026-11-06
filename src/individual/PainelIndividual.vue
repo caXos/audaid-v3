@@ -6,6 +6,7 @@ import type { Opcoes } from '../config/opcoes';
 import { ESCRITA_LIBERADA } from '../fluxo/executor';
 import type { Ambiente } from '../pje/ambiente';
 import type { Audiencia } from '../pje/api';
+import { focoDoProcesso, type FocoPauta } from '../pauta/estadoPauta';
 import { formatarDataHora } from '../ui/dom';
 import { carregarDados, type Dados } from './dados';
 import FormularioIndividual from './FormularioIndividual.vue';
@@ -17,6 +18,7 @@ const props = defineProps<{
   aoFechar: () => void;
   aoAbrirDiagnostico: () => void;
   aoAbrirLote: () => void;
+  aoAbrirPauta: (foco?: FocoPauta) => void;
 }>();
 
 const simulando = props.opcoes.simulacao || !ESCRITA_LIBERADA;
@@ -47,6 +49,14 @@ const linhaAudiencia = (a: Audiencia) => `${formatarDataHora(a.dataInicio)} · $
       <div class="linha-cab">
         <p>{{ subtitulo }}</p>
         <button class="acao secundaria pequena" type="button" @click="aoAbrirLote()">Abrir controle em lote</button>
+        <button
+          class="acao secundaria pequena"
+          type="button"
+          title="A pauta dos seus órgãos, no dia da próxima audiência deste processo"
+          @click="aoAbrirPauta(dados ? focoDoProcesso(dados.audiencias, dados.idOrgaoLogado, idProcesso) : undefined)"
+        >
+          Abrir a pauta
+        </button>
         <button class="acao secundaria pequena" type="button" @click="aoAbrirDiagnostico()">Diagnóstico</button>
       </div>
       <button class="fechar" type="button" title="Fechar" @click="aoFechar()">×</button>

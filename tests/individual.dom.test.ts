@@ -412,3 +412,17 @@ describe('Link para o lote (D1)', () => {
     expect(aoAbrirLote).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('"Abrir a pauta" (3.2, D88, D90)', () => {
+  it('chama quem abre a Pauta; sem audiência futura no órgão logado, sem foco', async () => {
+    const aoAbrirPauta = vi.fn();
+    const c = new ControleIndividual(ambiente, () => {}, () => {}, aoAbrirPauta);
+    c.definirProcesso(100);
+    c.alternar(opcoesPadrao(true));
+    const raiz = document.getElementById('audaid-v3-individual')!.shadowRoot!;
+    await vi.waitFor(() => expect(raiz.textContent).toContain('Redesignar audiência'));
+    [...raiz.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Abrir a pauta')!.click();
+    // As audiências do processo falso são de outubro e de 05/11/2026: já passaram.
+    expect(aoAbrirPauta).toHaveBeenCalledWith(undefined);
+  });
+});
