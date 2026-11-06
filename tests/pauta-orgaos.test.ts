@@ -6,6 +6,8 @@ import { FilaDeLeitura } from '../src/pauta/fila';
 import {
   cidadeDoNome,
   codigoDoOrgao,
+  ehFimDeSemana,
+  temConteudo,
   mesDaPauta,
   mesesDoHorizonte,
   mesSeguinte,
@@ -71,14 +73,22 @@ describe('ordem dos órgãos (D87b)', () => {
 });
 
 describe('período (D91)', () => {
-  it('o mês de hoje começa hoje; os outros, no dia 1; só dias úteis', () => {
-    // 09/11/2026 é segunda-feira.
+  it('o mês de hoje começa hoje; os outros, no dia 1; o fim de semana entra (a tela decide se mostra)', () => {
+    // 09/11/2026 é segunda-feira; 14/11, sábado.
     const [nov, dez] = mesesDoHorizonte('2026-11-11', 2);
     expect(nov!.rotulo).toBe('Novembro 2026');
     expect(nov!.dias[0]).toBe('2026-11-11');
-    expect(nov!.dias).not.toContain('2026-11-14');
+    expect(nov!.dias).toContain('2026-11-14');
     expect(dez!.dias[0]).toBe('2026-12-01');
-    expect(dez!.dias).toHaveLength(23);
+    expect(dez!.dias).toHaveLength(31);
+    expect(ehFimDeSemana('2026-11-14')).toBe(true);
+    expect(ehFimDeSemana('2026-11-13')).toBe(false);
+  });
+
+  it('o código do mês (prova técnica de 06/11/2026): S = sem pauta; F e R = sem expediente; o resto tem algo', () => {
+    expect(['C', 'V', 'Z', 'X'].map(temConteudo)).toEqual([true, true, true, true]);
+    expect(['S', 'F', 'R'].map(temConteudo)).toEqual([false, false, false]);
+    expect(temConteudo(undefined)).toBe(false);
   });
 
   it('o horizonte tem o número de meses das Opções e atravessa o ano', () => {
@@ -88,9 +98,9 @@ describe('período (D91)', () => {
     expect(mesDaPauta('2027-02').rotulo).toBe('Fevereiro 2027');
   });
 
-  it('o mês que termina num fim de semana, a partir de hoje, pode não ter dia útil', () => {
-    expect(mesDaPauta('2026-11', '2026-11-28').dias).toEqual(['2026-11-30']);
-    expect(mesDaPauta('2026-01', '2026-01-31').dias).toEqual([]);
+  it('a partir de hoje, até o último dia do mês', () => {
+    expect(mesDaPauta('2026-11', '2026-11-28').dias).toEqual(['2026-11-28', '2026-11-29', '2026-11-30']);
+    expect(mesDaPauta('2026-01', '2026-01-31').dias).toEqual(['2026-01-31']);
   });
 
   it('rótulo do dia', () => {

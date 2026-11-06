@@ -63,9 +63,28 @@ const PAUTA: Record<string, object[]> = {
   [`504|${D1}`]: [audiencia(12, '08:30', 'Conciliação em Conhecimento', 174)],
   [`503|${D2}`]: [audiencia(13, '14:00', 'Instrução', 174)],
   [`162|${D1}`]: [audiencia(21, '10:00', 'Inicial', 49)],
+  // Um sábado com audiência (D90: o fim de semana com algo aparece).
+  ['503|2026-11-14']: [audiencia(15, '09:00', 'Conciliação', 174)],
 };
 
+/**
+ * O mês da sala como o PJe respondeu na prova técnica de 06/11/2026: um item por dia, `{ dia, tipo }`.
+ * Aqui: "C" com audiência, "V" só com vaga, "Z" fim de semana com audiência, "F" feriado ou fim de
+ * semana, "S" sem nada.
+ */
+function mesDaSala(idSala: string, ano: number, mes: number) {
+  const ultimo = new Date(Date.UTC(ano, mes, 0)).getUTCDate();
+  return Array.from({ length: ultimo }, (_, i) => {
+    const dia = `${ano}-${String(mes).padStart(2, '0')}-${String(i + 1).padStart(2, '0')}`;
+    const fds = [0, 6].includes(new Date(`${dia}T12:00:00Z`).getUTCDay());
+    const itens = PAUTA[`${idSala}|${dia}`];
+    if (itens) return { dia: i + 1, tipo: itens.some((x) => 'idProcesso' in x) ? (fds ? 'Z' : 'C') : 'V' };
+    return { dia: i + 1, tipo: fds || dia === D3 ? 'F' : 'S' };
+  });
+}
+
 let perfisFalham = false;
+let mesFalha = false;
 const lidos: string[] = [];
 let ativas = 0;
 let maximoAtivas = 0;
@@ -87,6 +106,11 @@ async function responder(url: string, init?: RequestInit): Promise<Response> {
     if (u.pathname.endsWith('/salasaudiencias')) return json(SALAS[Number(u.searchParams.get('idOrgaoJulgador'))] ?? []);
     if (u.pathname.endsWith('/calendarioeventos')) {
       return json([{ id: 1, descricao: 'Feriado municipal', dataInicio: D3, dataFim: D3, feriado: true, suspendeAudiencia: true }]);
+    }
+    if (u.pathname.endsWith('/pautasaudiencias/classificacoes')) {
+      if (mesFalha) return new Response('', { status: 500 });
+      const p = (k: string) => u.searchParams.get(k) ?? '';
+      return json(mesDaSala(p('idSala'), Number(p('ano')), Number(p('mes'))));
     }
     if (u.pathname.endsWith('/classificacoes/dia')) {
       const dia = u.searchParams.get('data');
@@ -129,6 +153,7 @@ function memoria(): Armazenamento & { dados: Map<string, unknown> } {
 
 beforeEach(() => {
   perfisFalham = false;
+  mesFalha = false;
   lidos.length = 0;
   ativas = 0;
   maximoAtivas = 0;
@@ -221,7 +246,7 @@ describe('Pauta (3.2, entrega 1)', () => {
     expect(d1).toContain('09:00');
     expect(d1).toContain('AUTOR 11 (+) × EMPRESA 11 LTDA');
     expect(d1).toContain('100% Digital');
-    expect(d1).toContain('Vaga livre');
+    expect(d1).toContain('Vaga livre · Conciliação');
     expect(dia(D1).querySelector('a')!.getAttribute('href')).toBe('https://pje.trt9.jus.br/pjekz/processo/11/detalhe');
     await vi.waitFor(() => expect(dia('2026-11-12').textContent).toContain('Não há audiências nem vagas configuradas para esta sala neste dia'));
     // Segredo de justiça: sem os nomes.
@@ -271,6 +296,8 @@ describe('Pauta (3.2, entrega 1)', () => {
   });
 
   it('nunca mais de 4 consultas ao mesmo tempo (D92)', async () => {
+    // Sem o mês, todo dia útil é consultado: o pior caso para a fila.
+    mesFalha = true;
     const { mostrar } = await abrir();
     maximoAtivas = 0;
     await mostrar(['2026-11-09', '2026-11-10', '2026-11-11', '2026-11-12', '2026-11-13', '2026-11-16', '2026-11-17', '2026-11-18', '2026-11-19']);
@@ -330,7 +357,7 @@ describe('Pauta (3.2, entrega 1)', () => {
     await mostrar([D1, D2]);
     await escolher('pauta-sala', 'todas');
     await escolher('pauta-orgao', 'foz');
-    await vi.waitFor(() => expect(leiturasDoDia().some((l) => l.includes('idSalaAudiencia=300'))).toBe(true));
+    await vi.waitFor(() => expect(lidos.some((l) => l.includes('classificacoes?idSala=300'))).toBe(true));
     expect(vi.mocked(fetch).mock.calls.every(([, init]) => (init as RequestInit).method === 'GET')).toBe(true);
   });
 });
@@ -359,5 +386,46 @@ describe('a janela da Pauta', () => {
     expect(css).toMatch(/\.pauta-fundo\s*\{[^}]*z-index:\s*2147483647/);
     expect(css).toMatch(/\.pauta-janela\s*\{[^}]*position:\s*absolute/);
     expect(raiz.textContent).not.toContain('AudAid · Pauta · diagnóstico');
+  });
+});
+
+describe('o mês da sala (D92, prova técnica de 06/11/2026)', () => {
+  const leiturasDoMes = () => lidos.filter((l) => l.includes('/pautasaudiencias/classificacoes?'));
+
+  it('o dia "S" (sem pauta) não é consultado; o mês é lido uma vez por sala', async () => {
+    const { mostrar, dia } = await abrir();
+    await mostrar([D1, '2026-11-12', '2026-11-13']);
+    await vi.waitFor(() => expect(dia('2026-11-12').textContent).toContain('Não há audiências nem vagas configuradas'));
+    await vi.waitFor(() => expect(dia(D1).textContent).toContain('AUTOR 11'));
+    expect(dia('2026-11-13').textContent).toContain('sem pauta');
+    expect(leiturasDoDia().map((l) => l.slice(-10))).toEqual([D1]);
+    expect(leiturasDoMes()).toEqual(['/pje-comum-api/api/pautasaudiencias/classificacoes?idSala=503&ano=2026&mes=11']);
+  });
+
+  it('o feriado ("F") num dia útil é consultado: pode ter audiência a redesignar', async () => {
+    const { mostrar } = await abrir();
+    await mostrar([D3]);
+    await vi.waitFor(() => expect(leiturasDoDia().some((l) => l.endsWith(D3))).toBe(true));
+  });
+
+  it('fim de semana com audiência aparece, com o aviso; sem nada, não aparece (D90)', async () => {
+    const { mostrar, dia, raiz } = await abrir();
+    expect(raiz.querySelector('[data-dia="2026-11-14"]')).toBeNull();
+    await mostrar([D1]);
+    await vi.waitFor(() => expect(raiz.querySelector('[data-dia="2026-11-14"]')).not.toBeNull());
+    expect(raiz.querySelector('[data-dia="2026-11-15"]')).toBeNull();
+    await mostrar(['2026-11-14']);
+    await vi.waitFor(() => expect(dia('2026-11-14').textContent).toContain('AUTOR 15'));
+    expect(dia('2026-11-14').textContent).toContain('sáb, 14/11');
+    expect(dia('2026-11-14').textContent).toContain('Sábado: há 1 audiência(s), será necessário redesignar');
+  });
+
+  it('sem o mês, consulta todo dia útil e não mostra fim de semana', async () => {
+    mesFalha = true;
+    const { mostrar, dia, raiz } = await abrir();
+    await mostrar(['2026-11-12']);
+    await vi.waitFor(() => expect(dia('2026-11-12').textContent).toContain('Não há audiências nem vagas configuradas'));
+    expect(leiturasDoDia().some((l) => l.endsWith('2026-11-12'))).toBe(true);
+    expect(raiz.querySelector('[data-dia="2026-11-14"]')).toBeNull();
   });
 });

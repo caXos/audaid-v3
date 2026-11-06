@@ -88,6 +88,21 @@ export async function carregarOrgaos(
   return { orgaos: ordenarOrgaos(orgaos.filter((o): o is OrgaoPauta => o !== null)), avisos };
 }
 
+/**
+ * O mês da sala (D92): dia do mês → código ("S" = sem pauta, ver `temConteudo`). Forma confirmada na
+ * prova técnica de 06/11/2026: `[{ dia: nº, tipo: "C"|"F"|"R"|"S"|"V"|"Z" }]`, um item por dia.
+ */
+export async function carregarMes(ler: LeitorPauta, idSala: number, chaveMes: string): Promise<Map<number, string>> {
+  const [ano, mes] = chaveMes.split('-').map(Number);
+  const r = await ler<unknown>(caminhos.pautaMes(idSala, ano!, mes!));
+  if (!r.ok) throw new Error(r.erro.mensagem);
+  const codigos = new Map<number, string>();
+  if (Array.isArray(r.dados)) {
+    for (const e of r.dados) if (ehObjeto(e) && typeof e['dia'] === 'number' && typeof e['tipo'] === 'string') codigos.set(e['dia'], e['tipo']);
+  }
+  return codigos;
+}
+
 /** A pauta de uma sala num dia, já normalizada (vagas e audiências, pela hora). */
 export async function carregarDia(ler: LeitorPauta, idSala: number, dia: string): Promise<EntradaPauta[]> {
   const r = await ler<PautaDia>(caminhos.pautaDia(idSala, dia));

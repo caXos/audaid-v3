@@ -220,8 +220,10 @@ const ehDestaque = (dia: string, l: LinhaPauta) =>
           <template v-else>
             <template v-for="m in e.meses" :key="m.chave">
               <h2 class="divisor-mes" :data-mes="m.chave">{{ m.rotulo }}</h2>
-              <p v-if="!m.dias.length" class="vazio-dia suave">Nenhum dia útil daqui até o fim do mês.</p>
-              <section v-for="dia in m.dias" :key="dia" :ref="(el) => observarDia(dia, el as Element | null)" class="dia-pauta" :data-dia="dia">
+              <p v-if="!m.dias.some((dia) => p.diaVisivel(dia))" class="vazio-dia suave">Nenhum dia útil daqui até o fim do mês.</p>
+              <!-- D90: o fim de semana só aparece quando o mês da sala diz que ele tem algo. -->
+              <template v-for="dia in m.dias" :key="dia">
+              <section v-if="p.diaVisivel(dia)" :ref="(el) => observarDia(dia, el as Element | null)" class="dia-pauta" :data-dia="dia">
                 <!-- Uma leitura do estado por dia e por desenho (o v-for de um item só faz de variável). -->
                 <template v-for="d in [p.diaDaSelecao(dia)]" :key="dia">
                 <header class="cab-dia">
@@ -250,8 +252,9 @@ const ehDestaque = (dia: string, l: LinhaPauta) =>
                       <td class="hora">{{ l.hora }}</td>
                       <td v-if="todasAsSalas" class="sala-linha">{{ l.sala }}</td>
                       <td v-if="l.tipo === 'vaga'" colspan="3">
+                        <!-- O separador fica dentro do texto: espaço sozinho no começo de um elemento o Vue descarta. -->
                         <span class="selo-vaga">Vaga livre</span>
-                        <span v-if="l.descricaoTipo" class="suave"> {{ l.descricaoTipo }}</span>
+                        <span v-if="l.descricaoTipo" class="suave"> · {{ l.descricaoTipo }}</span>
                       </td>
                       <template v-else>
                         <td class="numero">
@@ -282,6 +285,7 @@ const ehDestaque = (dia: string, l: LinhaPauta) =>
                 </template>
                 </template>
               </section>
+              </template>
             </template>
             <div class="fim-pauta">
               <button class="acao secundaria" type="button" @click="p.carregarMaisUmMes()">Carregar mais um mês</button>

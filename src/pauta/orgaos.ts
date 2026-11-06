@@ -73,8 +73,29 @@ export interface MesPauta {
   chave: string;
   /** "Novembro 2026" */
   rotulo: string;
-  /** Os dias úteis do mês, a partir de hoje no mês atual (D91: nada antes de hoje). */
+  /**
+   * Todos os dias do mês, a partir de hoje no mês atual (D91: nada antes de hoje). O fim de semana
+   * só aparece na lista quando o mês da sala diz que ele tem algo (D90, `temConteudo`).
+   */
   dias: string[];
+}
+
+/** Sábado ou domingo. */
+export const ehFimDeSemana = (dia: string) => [0, 6].includes(diaDaSemana(dia));
+
+/**
+ * Os códigos do mês da sala (`classificacoes?idSala=&ano=&mes=`), pela prova técnica de 06/11/2026:
+ * - "S": sem pauta (nem audiência, nem vaga): o dia não é consultado (D92);
+ * - "C": só audiências; "V": só vagas; "Z": audiências numa sala sem vagas configuradas;
+ * - "F" e "R": dias sem expediente (a v1 lia "F" como dia não útil; "R" ainda sem confirmação).
+ * Código desconhecido conta como "tem algo": na dúvida, consulta.
+ */
+export const SEM_PAUTA = 'S';
+const SEM_EXPEDIENTE = new Set(['F', 'R']);
+
+/** O dia tem audiência ou vaga, pelo código do mês? (Sem código, `false`.) */
+export function temConteudo(codigo: string | undefined): boolean {
+  return codigo !== undefined && codigo !== SEM_PAUTA && !SEM_EXPEDIENTE.has(codigo);
 }
 
 const doisDigitos = (n: number) => String(n).padStart(2, '0');
@@ -86,16 +107,14 @@ export function mesSeguinte(chave: string, k = 1): string {
   return `${Math.floor(total / 12)}-${doisDigitos((total % 12) + 1)}`;
 }
 
-/** Um mês da Pauta: os dias de segunda a sexta, a partir de `desde` (inclusive). */
+/** Um mês da Pauta: os dias a partir de `desde` (inclusive). */
 export function mesDaPauta(chave: string, desde?: string): MesPauta {
   const [a, m] = chave.split('-').map(Number);
   const ultimo = new Date(Date.UTC(a ?? 0, m ?? 1, 0)).getUTCDate();
   const dias: string[] = [];
   for (let d = 1; d <= ultimo; d++) {
     const dia = `${chave}-${doisDigitos(d)}`;
-    if (desde && dia < desde) continue;
-    const semana = diaDaSemana(dia);
-    if (semana !== 0 && semana !== 6) dias.push(dia);
+    if (!desde || dia >= desde) dias.push(dia);
   }
   return { chave, rotulo: `${MESES[(m ?? 1) - 1]} ${a}`, dias };
 }

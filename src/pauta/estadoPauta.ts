@@ -10,9 +10,19 @@ import { pjeGet } from '../pje/http';
 import { lerCookie, lerSessao } from '../pje/sessao';
 import { classificarData, hoje } from '../regras/calendario';
 import type { EntradaPauta } from '../regras/pauta';
-import { carregarAdvogados, carregarCalendario, carregarDia, carregarOrgaos, type LeitorPauta } from './dados';
+import { carregarAdvogados, carregarCalendario, carregarDia, carregarMes, carregarOrgaos, type LeitorPauta } from './dados';
 import { FilaDeLeitura } from './fila';
-import { mesDaPauta, mesesDoHorizonte, mesSeguinte, rotuloDoOrgao, type MesPauta, type OrgaoPauta } from './orgaos';
+import {
+  ehFimDeSemana,
+  mesDaPauta,
+  mesesDoHorizonte,
+  mesSeguinte,
+  rotuloDoOrgao,
+  SEM_PAUTA,
+  temConteudo,
+  type MesPauta,
+  type OrgaoPauta,
+} from './orgaos';
 
 /** Onde abrir a Pauta pelo "Abrir a pauta" do Individual (D90): a próxima audiência do processo. */
 export interface FocoPauta {
@@ -90,6 +100,8 @@ export function usePauta(deps: DependenciasPauta) {
     destaque: deps.foco ?? null as FocoPauta | null,
     /** `${idSala}|${dia}` → a pauta daquela sala naquele dia. */
     dias: new Map<string, EstadoDia>(),
+    /** `${idSala}|${AAAA-MM}` → dia do mês → código (D92); `null` se o mês não veio. */
+    codigos: new Map<string, Map<number, string> | null>(),
     calendarios: new Map<number, EventoCalendario[]>(),
     /** idProcesso → texto do "(?)", ou `null` enquanto carrega. */
     advogados: new Map<number, string | null>(),
@@ -107,21 +119,50 @@ export function usePauta(deps: DependenciasPauta) {
     return estado.sala === 'todas' ? o.salas : o.salas.filter((s) => s.id === estado.sala);
   }
 
-  function pedirSalaDia(idSala: number, dia: string) {
+  /** O mês da sala, lido uma vez (D92). Se ele não vier, os dias são consultados um a um. */
+  const promessasMes = new Map<string, Promise<Map<number, string> | null>>();
+  function mesDaSala(idSala: number, chaveMes: string): Promise<Map<number, string> | null> {
+    const chave = `${idSala}|${chaveMes}`;
+    let p = promessasMes.get(chave);
+    if (!p) {
+      p = fila.executar(() => carregarMes(ler, idSala, chaveMes)).then(
+        (codigos) => codigos,
+        () => null,
+      );
+      void p.then((codigos) => estado.codigos.set(chave, codigos));
+      promessasMes.set(chave, p);
+    }
+    return p;
+  }
+
+  async function pedirSalaDia(idSala: number, dia: string) {
     const chave = `${idSala}|${dia}`;
     if (estado.dias.has(chave)) return;
     estado.dias.set(chave, { estado: 'carregando', linhas: [] });
     const minha = geracao;
-    void fila
-      .executar(() => carregarDia(ler, idSala, dia))
-      .then(
-        (linhas) => {
-          if (minha === geracao) estado.dias.set(chave, { estado: 'ok', linhas });
-        },
-        (e: unknown) => {
-          if (minha === geracao) estado.dias.set(chave, { estado: 'erro', linhas: [], erro: e instanceof Error ? e.message : String(e) });
-        },
-      );
+    const codigos = await mesDaSala(idSala, dia.slice(0, 7));
+    if (minha !== geracao) return;
+    // D92: o dia que o mês diz estar sem pauta nem é consultado.
+    if (codigos?.get(Number(dia.slice(8, 10))) === SEM_PAUTA) {
+      estado.dias.set(chave, { estado: 'ok', linhas: [] });
+      return;
+    }
+    try {
+      const linhas = await fila.executar(() => carregarDia(ler, idSala, dia));
+      if (minha === geracao) estado.dias.set(chave, { estado: 'ok', linhas });
+    } catch (e) {
+      if (minha === geracao) estado.dias.set(chave, { estado: 'erro', linhas: [], erro: e instanceof Error ? e.message : String(e) });
+    }
+  }
+
+  /**
+   * D90: dia útil sempre aparece; fim de semana, só se o mês de alguma sala da seleção disser que
+   * ele tem algo. Os códigos chegam com a primeira consulta do mês.
+   */
+  function diaVisivel(dia: string): boolean {
+    if (!ehFimDeSemana(dia)) return true;
+    const n = Number(dia.slice(8, 10));
+    return salasDaSelecao().some((s) => temConteudo(estado.codigos.get(`${s.id}|${dia.slice(0, 7)}`)?.get(n)));
   }
 
   function pedirCalendario(idOrgao: number) {
@@ -135,7 +176,7 @@ export function usePauta(deps: DependenciasPauta) {
     const o = orgao();
     if (!o) return;
     pedirCalendario(o.id);
-    for (const s of salasDaSelecao()) pedirSalaDia(s.id, dia);
+    for (const s of salasDaSelecao()) void pedirSalaDia(s.id, dia);
   }
 
   function marcarVisivel(dia: string, visivel: boolean) {
@@ -208,7 +249,10 @@ export function usePauta(deps: DependenciasPauta) {
     if (!o) return;
     geracao++;
     const salas = new Set(o.salas.map((s) => s.id));
-    for (const chave of [...estado.dias.keys()]) if (salas.has(Number(chave.split('|')[0]))) estado.dias.delete(chave);
+    const daSala = (chave: string) => salas.has(Number(chave.split('|')[0]));
+    for (const chave of [...estado.dias.keys()]) if (daSala(chave)) estado.dias.delete(chave);
+    for (const chave of [...promessasMes.keys()]) if (daSala(chave)) promessasMes.delete(chave);
+    for (const chave of [...estado.codigos.keys()]) if (daSala(chave)) estado.codigos.delete(chave);
     estado.calendarios.delete(o.id);
     pedirVisiveis();
   }
@@ -256,6 +300,7 @@ export function usePauta(deps: DependenciasPauta) {
     hojeIso,
     orgao,
     diaDaSelecao,
+    diaVisivel,
     avisoDoDia,
     pedirDia,
     marcarVisivel,
