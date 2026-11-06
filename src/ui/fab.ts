@@ -24,9 +24,21 @@ const CSS = `
 }
 .aviso-v1 button { position: absolute; top: 4px; right: 6px; border: 0; background: none; cursor: pointer; font-size: 16px; color: inherit; }
 .simulacao { background: #fce8e6; color: #b3261e; border-radius: 999px; padding: 2px 8px; font-weight: 600; font-size: 10px; letter-spacing: .03em; }
+.menu { display: flex; flex-direction: column; gap: 4px; align-items: stretch; }
+.item-menu {
+  border: 1px solid #00838f; border-radius: 999px; background: #fff; color: #00838f; cursor: pointer;
+  font: 600 12px/1 system-ui, sans-serif; padding: 8px 14px; box-shadow: 0 2px 8px rgba(0,0,0,.2); white-space: nowrap;
+}
+.item-menu:hover, .item-menu:focus-visible { background: #00838f; color: #fff; outline: none; }
 `;
 
 export type ModoFab = 'ativo' | 'sem-aceite';
+
+export interface ItemMenuFab {
+  rotulo: string;
+  titulo: string;
+  acao: () => void;
+}
 
 /** O botão flutuante (§2.2, §2.6). Mora em Shadow DOM para não sofrer com o CSS do PJe. */
 export class Fab {
@@ -34,6 +46,8 @@ export class Fab {
   private readonly caixa = h('div', { class: 'fab' });
   private avisoV1Fechado = false;
   private avisoV1: HTMLElement | null = null;
+  /** D88: fora do processo, o FAB abre um menu pequeno ("Pauta" e "Controle em Lote"). */
+  private menu: HTMLElement | null = null;
 
   constructor(
     private readonly aoClicar: () => void,
@@ -70,10 +84,48 @@ export class Fab {
       botao.append(criarIcone());
     }
 
+    if (modo === 'sem-aceite') this.menu = null;
     const filhos: Node[] = [botao];
+    if (this.menu) filhos.push(this.menu);
     if (modo === 'ativo' && opcoes.simulacao) filhos.push(h('span', { class: 'simulacao', title: 'Modo simulação: nada é gravado no PJe' }, 'SIMULAÇÃO'));
     if (this.avisoV1) filhos.push(this.avisoV1);
     this.caixa.replaceChildren(...filhos);
+  }
+
+  get menuAberto() {
+    return this.menu !== null;
+  }
+
+  /** Abre o menu ao lado do botão; se já estiver aberto, fecha. Escolher um item fecha o menu. */
+  alternarMenu(itens: ItemMenuFab[]) {
+    if (this.menu) {
+      this.fecharMenu();
+      return;
+    }
+    const botoes = itens.map((item) =>
+      h('button', {
+        class: 'item-menu',
+        type: 'button',
+        title: item.titulo,
+        onclick: () => {
+          this.fecharMenu();
+          item.acao();
+        },
+      }, item.rotulo),
+    );
+    this.menu = h('div', { class: 'menu' }, ...botoes);
+    this.menu.setAttribute('role', 'menu');
+    for (const b of botoes) b.setAttribute('role', 'menuitem');
+    this.menu.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Escape') this.fecharMenu();
+    });
+    this.caixa.children[0]?.after(this.menu);
+    botoes[0]?.focus();
+  }
+
+  fecharMenu() {
+    this.menu?.remove();
+    this.menu = null;
   }
 
   /** D36: enquanto a v1 estiver instalada, avisa para desinstalá-la (uma vez por página). */

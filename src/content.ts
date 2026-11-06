@@ -4,6 +4,7 @@
 import { aoMudarArmazenado, armazenamentoDaExtensao, enviarMensagem, lerArmazenado, type Armazenado } from './ext/api';
 import { ControleIndividual } from './individual/painel';
 import { ControleLote } from './lote/ControleLote';
+import { ControlePauta } from './pauta/ControlePauta';
 import { lerAmbiente, lerTela } from './pje/ambiente';
 import { ProvaTecnica } from './prova/painel';
 import { Fab, v1Presente } from './ui/fab';
@@ -13,6 +14,7 @@ const ambiente = lerAmbiente(location.href);
 if (ambiente && !document.getElementById('audaid-v3-fab')) {
   const diagnostico = new ProvaTecnica(ambiente);
   const lote = new ControleLote(ambiente, __AUDAID_VERSAO__, armazenamentoDaExtensao);
+  const pauta = new ControlePauta(ambiente, __AUDAID_VERSAO__);
   const individual = new ControleIndividual(
     ambiente,
     () => {
@@ -36,13 +38,30 @@ if (ambiente && !document.getElementById('audaid-v3-fab')) {
         lote.fechar();
         return;
       }
+      if (pauta.aberto) {
+        pauta.fechar();
+        return;
+      }
       if (diagnostico.aberto) {
         diagnostico.fechar();
         return;
       }
-      // D1: no processo, o Individual; fora dele, direto o lote.
-      if (idProcesso !== null) individual.alternar(estado.opcoes);
-      else lote.abrir(estado.opcoes);
+      // D1: no processo, o Individual. D88: fora dele, um menu com a Pauta e o Lote.
+      if (idProcesso !== null) {
+        individual.alternar(estado.opcoes);
+        return;
+      }
+      fab.alternarMenu([
+        // Entrega 0 da 3.2: a Pauta ainda é o diagnóstico (D86b).
+        { rotulo: 'Pauta', titulo: 'A pauta dos seus órgãos (por enquanto, o diagnóstico da Pauta: só leitura)', acao: () => pauta.abrir() },
+        {
+          rotulo: 'Controle em Lote',
+          titulo: 'Montar a pauta de um dia inteiro',
+          acao: () => {
+            if (estado?.aceite) lote.abrir(estado.opcoes);
+          },
+        },
+      ]);
     },
     () => void enviarMensagem({ tipo: 'abrir-termos' }),
   );
@@ -54,6 +73,7 @@ if (ambiente && !document.getElementById('audaid-v3-fab')) {
       individual.fechar();
       diagnostico.fechar();
       lote.fechar();
+      pauta.fechar();
     }
   };
 
@@ -63,9 +83,11 @@ if (ambiente && !document.getElementById('audaid-v3-fab')) {
     individual.garantirNaPagina();
     diagnostico.garantirNaPagina();
     lote.garantirNaPagina();
+    pauta.garantirNaPagina();
     fab.avisarV1(v1Presente());
     if (location.href === ultimaUrl) return;
     ultimaUrl = location.href;
+    fab.fecharMenu();
     const tela = lerTela(location.pathname);
     idProcesso = tela.tipo === 'processo' ? tela.idProcesso : null;
     individual.definirProcesso(idProcesso);
