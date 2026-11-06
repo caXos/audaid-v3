@@ -2,7 +2,7 @@
 // grava no PJe. As leituras novas (perfis, AUD4) vêm da v1 e são lidas de forma defensiva até a
 // prova técnica (D86b) confirmar a forma de cada resposta.
 
-import { lerPartes } from '../regras/partes';
+import { lerPartes, type Parte } from '../regras/partes';
 import { dicaAdvogados } from '../lote/apresentacao';
 import { caminhos, type EventoCalendario, type PautaDia, type RespostaPartes, type Sala } from '../pje/api';
 import type { Resposta } from '../pje/http';
@@ -153,6 +153,31 @@ export async function carregarDia(ler: LeitorPauta, idSala: number, dia: string)
 export async function carregarCalendario(ler: LeitorPauta, idOrgao: number): Promise<EventoCalendario[]> {
   const r = await ler<EventoCalendario[]>(caminhos.calendario(idOrgao));
   return r.ok && Array.isArray(r.dados) ? r.dados : [];
+}
+
+/** As partes de uma audiência de "Todas as salas", lidas a pedido (D94). */
+export interface PartesDaAudiencia {
+  segredo: boolean;
+  juizoDigital: boolean;
+  autores: Parte[];
+  reus: Parte[];
+}
+
+/**
+ * D94: "Carregar partes" em "Todas as salas", que vem do AUD4 sem as partes (D92b). Primeiro o
+ * processo, que diz se é segredo de justiça e se é 100% Digital; as partes só são lidas se não for
+ * segredo, e assim nenhum nome de processo em segredo chega à Pauta.
+ */
+export async function carregarPartesDaAudiencia(ler: LeitorPauta, idProcesso: number): Promise<PartesDaAudiencia> {
+  const semAcesso = (r: Resposta<unknown>) => !r.ok && (r.status === 401 || r.status === 403);
+  const rProc = await ler<Record<string, unknown>>(caminhos.processo(idProcesso));
+  if (!rProc.ok) throw new Error(semAcesso(rProc) ? 'sem acesso a este processo' : rProc.erro.mensagem);
+  const segredo = rProc.dados?.['segredoDeJustica'] === true;
+  const juizoDigital = rProc.dados?.['juizoDigital'] === true;
+  if (segredo) return { segredo, juizoDigital, autores: [], reus: [] };
+  const rPartes = await ler<RespostaPartes>(caminhos.partes(idProcesso));
+  if (!rPartes.ok) throw new Error(semAcesso(rPartes) ? 'sem acesso às partes' : rPartes.erro.mensagem);
+  return { segredo, juizoDigital, ...lerPartes(rPartes.dados) };
 }
 
 /** O "(?)" da linha (D61, D92): os advogados de cada parte, lidos só quando pedidos. */

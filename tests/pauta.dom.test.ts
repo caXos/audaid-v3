@@ -148,6 +148,9 @@ async function responder(url: string, init?: RequestInit): Promise<Response> {
       return json(itens ? { dia, pautasDoDia: itens } : { dia });
     }
     if (/\/processos\/id\/\d+\/partes$/.test(u.pathname)) return json(partes);
+    const processo = /\/processos\/id\/(\d+)$/.exec(u.pathname);
+    // D94: o processo 12 está em segredo de justiça; o 11 é 100% Digital.
+    if (processo) return json({ id: Number(processo[1]), segredoDeJustica: processo[1] === '12', juizoDigital: processo[1] === '11' });
     return new Response('não encontrado', { status: 404 });
   } finally {
     ativas--;
@@ -478,5 +481,51 @@ describe('o mês da sala (D92, prova técnica de 06/11/2026)', () => {
     await vi.waitFor(() => expect(dia('2026-11-12').textContent).toContain('Não há audiências nem vagas configuradas'));
     expect(leiturasDoDia().some((l) => l.endsWith('2026-11-12'))).toBe(true);
     expect(raiz.querySelector('[data-dia="2026-11-14"]')).toBeNull();
+  });
+});
+
+describe('"Carregar partes" em "Todas as salas" (D94)', () => {
+  const lidasDoProcesso = () => lidos.filter((l) => /\/processos\/id\/\d+(\/partes)?$/.test(l));
+
+  async function todas() {
+    const t = await abrir();
+    await t.mostrar([D1]);
+    await t.escolher('pauta-sala', 'todas');
+    await vi.waitFor(() => expect(t.dia(D1).textContent).toContain('2 audiências'));
+    const linha = (n: number) => [...t.dia(D1).querySelectorAll('tr')].find((tr) => tr.textContent?.includes(`00001${n}-52`))!;
+    const botao = (el: ParentNode, texto: string) => [...el.querySelectorAll('button')].find((b) => b.textContent?.trim() === texto);
+    return { ...t, linha, botao };
+  }
+
+  it('na linha: lê o processo e as partes só daquela audiência, com os advogados no "(?)" e o 100% Digital', async () => {
+    const { linha, botao } = await todas();
+    expect(lidasDoProcesso()).toEqual([]);
+    botao(linha(11), 'Carregar partes')!.click();
+    await vi.waitFor(() => expect(linha(11).textContent).toContain('ANA EXEMPLO (+1) × EMPRESA MODELO LTDA (+1)'));
+    expect(lidasDoProcesso()).toEqual(['/pje-comum-api/api/processos/id/11', '/pje-comum-api/api/processos/id/11/partes']);
+    expect(linha(11).textContent).toContain('100% Digital');
+    expect(linha(11).querySelector('.botao-ajuda')!.getAttribute('title')).toMatch(/ADVOGAD/);
+    // A outra linha continua com o botão, sem consulta.
+    expect(botao(linha(12), 'Carregar partes')).toBeDefined();
+  });
+
+  it('no dia: carrega todas; o processo em segredo de justiça não tem as partes lidas', async () => {
+    const { dia, linha, botao } = await todas();
+    const doDia = botao(dia(D1).querySelector('.cab-dia')!, 'Carregar partes')!;
+    expect(doDia.disabled).toBe(false);
+    doDia.click();
+    await vi.waitFor(() => expect(linha(12).textContent).toContain('Segredo de justiça'));
+    await vi.waitFor(() => expect(linha(11).textContent).toContain('ANA EXEMPLO (+1) × EMPRESA MODELO LTDA (+1)'));
+    expect(lidasDoProcesso()).toContain('/pje-comum-api/api/processos/id/12');
+    expect(lidasDoProcesso()).not.toContain('/pje-comum-api/api/processos/id/12/partes');
+    expect(linha(12).querySelector('.botao-ajuda')).toBeNull();
+    await vi.waitFor(() => expect(doDia.disabled).toBe(true));
+  });
+
+  it('na sala, não há "Carregar partes": a pauta do dia já traz as partes', async () => {
+    const { mostrar, dia } = await abrir();
+    await mostrar([D1]);
+    await vi.waitFor(() => expect(dia(D1).textContent).toContain('AUTOR 11'));
+    expect([...dia(D1).querySelectorAll('button')].some((b) => b.textContent?.includes('Carregar partes'))).toBe(false);
   });
 });

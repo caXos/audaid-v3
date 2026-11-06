@@ -7,7 +7,9 @@ import type { OpcaoBusca } from '../componentes/opcaoBusca';
 import type { Opcoes, OrgaoConhecido } from '../config/opcoes';
 import type { Armazenamento } from '../ext/api';
 import type { Ambiente } from '../pje/ambiente';
-import type { LeitorPauta } from './dados';
+import { resumoPolo } from '../lote/apresentacao';
+import type { Parte } from '../regras/partes';
+import type { LeitorPauta, PartesDaAudiencia } from './dados';
 import DiagnosticoPauta from './DiagnosticoPauta.vue';
 import { usePauta, type EstadoDia, type FocoPauta, type LinhaPauta } from './estadoPauta';
 import { rotuloDoDia, rotuloDoOrgao } from './orgaos';
@@ -169,6 +171,26 @@ function dicaAdvogados(idProcesso?: number): string {
   return e.advogados.get(idProcesso) ?? 'Consultando os advogados…';
 }
 
+/** D94: "AUTOR (+1) × RÉU (+2)", como a linha do Lote (D61). */
+function resumoDasPartes(d: PartesDaAudiencia): string {
+  const polo = (partes: Parte[]) => {
+    const r = resumoPolo(partes);
+    return r.mais ? `${r.nome} (+${r.mais})` : r.nome;
+  };
+  return `${polo(d.autores)} × ${polo(d.reus)}`;
+}
+
+/** O "Carregar partes" do dia fica desabilitado quando todas as audiências já foram pedidas. */
+const partesDoDiaPedidas = (d: EstadoDia) =>
+  d.linhas.every((l) => l.idProcesso === undefined || (e.partes.has(l.idProcesso) && e.partes.get(l.idProcesso)!.estado !== 'erro'));
+
+/** O 100% Digital: da pauta da sala ou, em "Todas as salas", das partes carregadas (D94). */
+function ehDigital(l: LinhaPauta): boolean {
+  if (l.processo?.juizoDigital) return true;
+  const pa = l.idProcesso === undefined ? undefined : e.partes.get(l.idProcesso);
+  return pa?.estado === 'ok' && pa.dados.juizoDigital;
+}
+
 const urlProcesso = (id?: number) => (id === undefined ? undefined : `${props.ambiente.origem}/pjekz/processo/${id}/detalhe`);
 const ehDestaque = (dia: string, l: LinhaPauta) =>
   Boolean(e.destaque && e.destaque.dia === dia && e.destaque.idProcesso !== undefined && l.idProcesso === e.destaque.idProcesso);
@@ -236,6 +258,17 @@ const ehDestaque = (dia: string, l: LinhaPauta) =>
                   <template v-for="aviso in [textoAviso(dia, d)]" :key="dia">
                     <span v-if="aviso" :class="aviso.classe"> · {{ aviso.texto }}</span>
                   </template>
+                  <!-- D94: em "Todas as salas", as partes e os advogados de todas as audiências do dia. -->
+                  <button
+                    v-if="todasAsSalas && d.estado === 'ok' && d.linhas.length"
+                    class="acao secundaria pequena botao-partes-dia"
+                    type="button"
+                    :disabled="partesDoDiaPedidas(d)"
+                    title="Carrega as partes e os advogados de todas as audiências deste dia"
+                    @click="p.pedirPartesDoDia(dia)"
+                  >
+                    Carregar partes
+                  </button>
                 </header>
                 <div v-if="d.estado === 'espera' || d.estado === 'carregando'" class="esqueleto" aria-hidden="true">
                   <span></span>
@@ -266,8 +299,33 @@ const ehDestaque = (dia: string, l: LinhaPauta) =>
                         <td class="numero">
                           <a :href="urlProcesso(l.idProcesso)" target="_blank" rel="noopener noreferrer" title="Abrir o processo numa aba nova">{{ l.nrProcesso ?? l.idProcesso }}</a>
                         </td>
-                        <!-- "Todas as salas" (D92b): o AUD4 não traz partes nem segredo de justiça; no lugar, a classe. -->
+                        <!-- "Todas as salas" (D92b): o AUD4 não traz partes nem segredo de justiça. Elas vêm a pedido (D94). -->
                         <td v-if="todasAsSalas" class="classe-linha">{{ l.processo?.classeSigla ?? '' }}</td>
+                        <td v-if="todasAsSalas" class="partes-linha">
+                          <template v-for="pa in [l.idProcesso === undefined ? undefined : e.partes.get(l.idProcesso)]" :key="l.idProcesso">
+                            <template v-if="pa?.estado === 'ok'">
+                              <template v-if="pa.dados.segredo">Segredo de justiça</template>
+                              <template v-else>
+                                {{ resumoDasPartes(pa.dados) }}
+                                <button class="ajuda botao-ajuda" type="button" :title="dicaAdvogados(l.idProcesso)" :aria-label="dicaAdvogados(l.idProcesso)">(?)</button>
+                              </template>
+                            </template>
+                            <span v-else-if="pa?.estado === 'carregando'" class="suave">Carregando as partes…</span>
+                            <template v-else-if="pa?.estado === 'erro'">
+                              <span class="erro-texto">Erro: {{ pa.erro }}</span>
+                              <button class="acao secundaria pequena" type="button" @click="p.pedirPartes(l.idProcesso!)">Tentar de novo</button>
+                            </template>
+                            <button
+                              v-else-if="l.idProcesso !== undefined"
+                              class="acao secundaria pequena"
+                              type="button"
+                              title="Carrega as partes e os advogados só desta audiência"
+                              @click="p.pedirPartes(l.idProcesso!)"
+                            >
+                              Carregar partes
+                            </button>
+                          </template>
+                        </td>
                         <td v-else class="partes-linha">
                           {{ partes(l) }}
                           <button
@@ -285,7 +343,7 @@ const ehDestaque = (dia: string, l: LinhaPauta) =>
                         </td>
                         <td class="tipo-linha">
                           {{ l.descricaoTipo ?? '—' }}
-                          <span v-if="l.processo?.juizoDigital" class="selo-digital">100% Digital</span>
+                          <span v-if="ehDigital(l)" class="selo-digital">100% Digital</span>
                         </td>
                       </template>
                     </tr>
@@ -347,7 +405,8 @@ const ehDestaque = (dia: string, l: LinhaPauta) =>
 .tabela-pauta .numero a { color: var(--cor-marca); text-decoration: none; font-variant-numeric: tabular-nums; }
 .tabela-pauta .numero a:hover { text-decoration: underline; }
 .tabela-pauta .tipo-linha { width: 34%; }
-.tabela-pauta .classe-linha { width: 90px; color: var(--cor-suave); }
+.tabela-pauta .classe-linha { width: 70px; color: var(--cor-suave); }
+.botao-partes-dia { margin-left: 10px; }
 .linha-vaga td { background: #fff4e5; border-top: 1px dashed #f0a35b; border-bottom: 1px dashed #f0a35b; }
 .selo-vaga { font-size: 11px; font-weight: 700; color: #a35a00; }
 .selo-digital { margin-left: 6px; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 999px; background: #e8f0fe; color: #1a56c4; white-space: nowrap; }

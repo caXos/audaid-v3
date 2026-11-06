@@ -17,8 +17,11 @@ import {
   carregarDia,
   carregarMes,
   carregarOrgaos,
+  carregarPartesDaAudiencia,
   type LeitorPauta,
+  type PartesDaAudiencia,
 } from './dados';
+import { dicaAdvogados } from '../lote/apresentacao';
 import { FilaDeLeitura } from './fila';
 import {
   ehFimDeSemana,
@@ -112,6 +115,8 @@ export function usePauta(deps: DependenciasPauta) {
     codigos: new Map<string, Map<number, string> | null>(),
     /** "Todas as salas" (D92b): `${idOrgao}|${AAAA-MM}` → as audiências do órgão no mês, por dia. */
     consolidado: new Map<string, { estado: 'carregando' | 'ok' | 'erro'; porDia: Map<string, LinhaPauta[]>; erro?: string }>(),
+    /** "Carregar partes" em "Todas as salas" (D94): idProcesso → as partes da audiência. */
+    partes: new Map<number, { estado: 'carregando' } | { estado: 'ok'; dados: PartesDaAudiencia } | { estado: 'erro'; erro: string }>(),
     calendarios: new Map<number, EventoCalendario[]>(),
     /** idProcesso → texto do "(?)", ou `null` enquanto carrega. */
     advogados: new Map<number, string | null>(),
@@ -299,6 +304,25 @@ export function usePauta(deps: DependenciasPauta) {
     estado.meses.push(mesDaPauta(mesSeguinte(ultimo.chave)));
   }
 
+  /** D94: as partes de uma audiência de "Todas as salas"; os advogados vão para o "(?)" da linha. */
+  function pedirPartes(idProcesso: number) {
+    const atual = estado.partes.get(idProcesso);
+    if (atual && atual.estado !== 'erro') return;
+    estado.partes.set(idProcesso, { estado: 'carregando' });
+    void fila.executar(() => carregarPartesDaAudiencia(ler, idProcesso)).then(
+      (dados) => {
+        estado.partes.set(idProcesso, { estado: 'ok', dados });
+        if (!dados.segredo) estado.advogados.set(idProcesso, dicaAdvogados([...dados.autores, ...dados.reus]) || 'Sem partes ativas.');
+      },
+      (e: unknown) => estado.partes.set(idProcesso, { estado: 'erro', erro: e instanceof Error ? e.message : String(e) }),
+    );
+  }
+
+  /** D94: "Carregar partes" do dia, em "Todas as salas": as de cada audiência do dia. */
+  function pedirPartesDoDia(dia: string) {
+    for (const l of diaDaSelecao(dia).linhas) if (l.tipo === 'audiencia' && l.idProcesso !== undefined) pedirPartes(l.idProcesso);
+  }
+
   function pedirAdvogados(idProcesso: number) {
     if (estado.advogados.has(idProcesso)) return;
     estado.advogados.set(idProcesso, null);
@@ -345,6 +369,8 @@ export function usePauta(deps: DependenciasPauta) {
     atualizar,
     carregarMaisUmMes,
     pedirAdvogados,
+    pedirPartes,
+    pedirPartesDoDia,
     iniciar,
     /** Lê de novo um dia que deu erro. */
     tentarDeNovo(dia: string) {
