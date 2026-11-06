@@ -348,3 +348,16 @@ describe('o diagnóstico dentro da Pauta', () => {
     await vi.waitFor(() => expect(dia(D1).textContent).toContain('AUTOR 11'));
   });
 });
+
+describe('a janela da Pauta', () => {
+  // Regressão do teste de 06/11/2026: o estilo da janela estava no componente do diagnóstico, que só
+  // entra quando é aberto; sem ele, a Pauta ia para o fim da página, atrás do PJe.
+  it('o CSS da janela (tela cheia, fixa, por cima) entra no Shadow DOM sem abrir o diagnóstico', async () => {
+    const { raiz } = await abrir();
+    const css = [...raiz.querySelectorAll('style')].map((s) => s.textContent ?? '').join('\n');
+    expect(css).toMatch(/\.pauta-fundo\s*\{[^}]*position:\s*fixed/);
+    expect(css).toMatch(/\.pauta-fundo\s*\{[^}]*z-index:\s*2147483647/);
+    expect(css).toMatch(/\.pauta-janela\s*\{[^}]*position:\s*absolute/);
+    expect(raiz.textContent).not.toContain('AudAid · Pauta · diagnóstico');
+  });
+});

@@ -166,17 +166,7 @@ onUnmounted(() => {
 </template>
 
 <style>
-.pauta-fundo { position: fixed; inset: 0; z-index: 2147483647; background: rgba(20, 28, 38, .45); }
-.pauta-janela {
-  position: absolute; inset: 16px; margin: 0 auto; max-width: 1100px;
-  display: flex; flex-direction: column; overflow: hidden;
-  background: var(--cor-fundo); border: 1px solid var(--cor-borda); border-radius: 10px;
-  box-shadow: 0 12px 40px rgba(0,0,0,.25);
-}
-.cabecalho-pauta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; padding-right: 44px; color: var(--cor-suave); position: relative; }
-.cabecalho-pauta h1 { margin: 0; color: var(--cor-texto); }
-.cabecalho-pauta .separador { color: var(--cor-borda); }
+/* A janela (.pauta-fundo, .pauta-janela, .cabecalho-pauta) vem da Pauta, que abre este diagnóstico. */
 .linha-diagnostico { font: 12px/1.45 ui-monospace, Consolas, monospace; overflow-wrap: anywhere; }
 .pauta-janela textarea { height: 260px; }
-button.acao:disabled { opacity: .45; cursor: not-allowed; }
 </style>
