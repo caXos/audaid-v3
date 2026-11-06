@@ -9,6 +9,7 @@ import { caminhos, type Audiencia, type EventoCalendario, type PautaDia } from '
 import {
   caminhosEscrita,
   lerRetornaPrazo,
+  payloadCancelar,
   payloadDesignar,
   payloadGigs,
   payloadJuizoDigital,
@@ -26,7 +27,8 @@ import { lerPauta, ocupanteDoMinuto } from '../regras/pauta';
 export const ESCRITA_LIBERADA = true;
 
 export interface Requisicao {
-  metodo: 'GET' | 'POST' | 'PUT';
+  /** PATCH: o cancelamento da Pauta (D89e). */
+  metodo: 'GET' | 'POST' | 'PUT' | 'PATCH';
   /** Caminho relativo à origem do PJe. */
   caminho: string;
   corpo?: unknown;
@@ -409,4 +411,85 @@ export function diagnosticarFalha(audiencias: Audiencia[] | undefined, p: Pick<P
     resumo: 'O processo ficou SEM audiência. Redesigne a antiga ou registre um GIGS com os dados dela.',
     acoes: ['redesignar-antiga', 'gigs-audiencia-perdida'],
   };
+}
+
+// ── Cancelamento (Pauta, D89e) ─────────────────────────────────────────────────────────────
+
+export interface PedidoCancelamento {
+  idProcesso: number;
+  /** `pautaAudienciaHorario.id` da pauta do dia: é o que o PATCH recebe. */
+  idAudiencia: number;
+  idSala: number;
+  idOrgaoLogado: number;
+  /** AAAA-MM-DD, o dia da audiência. */
+  data: string;
+  /** HH:MM */
+  hora: string;
+  /** Opcional (D89e); texto já com as variáveis resolvidas. */
+  gigs?: { texto: string; prazo: number };
+  /** AAAA-MM-DD: início do prazo do GIGS. */
+  hoje: string;
+}
+
+const naPauta = (dados: unknown, idAudiencia: number) => lerPauta(dados as PautaDia).some((e) => e.idAudiencia === idAudiencia);
+
+/**
+ * Cancela uma audiência pela Pauta (D89e): confere que ela ainda está na pauta, cancela e **confirma
+ * relendo o dia**, porque a resposta do PJe ainda diz "Designada" (captura de 06/11/2026). Só depois
+ * de confirmado vem o GIGS, se houver.
+ */
+export async function executarCancelamento(p: PedidoCancelamento, t: Transporte, aoPasso?: (passos: RegistroPasso[]) => void): Promise<ResultadoExecucao> {
+  const passos: RegistroPasso[] = [];
+  const registrar = (r: RegistroPasso) => {
+    passos.push(r);
+    aoPasso?.([...passos]);
+  };
+  const falha = (resumo: string): ResultadoExecucao => ({ desfecho: 'falha', resumo, passos, acoes: [], designou: false, recolocarFalhou: false });
+  const reqPauta: Requisicao = { metodo: 'GET', caminho: caminhos.pautaDia(p.idSala, p.data) };
+
+  // 1. A audiência ainda está lá? (Outra pessoa pode ter cancelado ou redesignado.)
+  const rAntes = await t.enviar(reqPauta);
+  if (!rAntes.ok) {
+    registrar({ titulo: 'Conferir a pauta do dia', estado: 'erro', requisicao: reqPauta, erro: rAntes.erro });
+    return falha('Não foi possível conferir a pauta. Nada foi alterado.');
+  }
+  if (!naPauta(rAntes.dados, p.idAudiencia)) {
+    registrar({ titulo: 'Conferir a pauta do dia', estado: 'erro', requisicao: reqPauta, detalhe: `A audiência das ${p.hora} não está mais na pauta.` });
+    return falha('A audiência não está mais na pauta: talvez já tenha sido cancelada ou redesignada. Nada foi alterado.');
+  }
+  registrar({ titulo: 'Conferir a pauta do dia', estado: 'ok', requisicao: reqPauta, detalhe: `A audiência das ${p.hora} está na pauta.` });
+
+  // 2. Cancelar.
+  const req: Requisicao = { metodo: 'PATCH', caminho: caminhosEscrita.cancelar(), corpo: payloadCancelar(p.idAudiencia) };
+  const r = await t.enviar(req);
+  if (!r.ok) {
+    registrar({ titulo: 'Cancelar a audiência', estado: 'erro', requisicao: req, erro: r.erro });
+    return falha('A audiência não foi cancelada. Nada mudou.');
+  }
+  registrar({ titulo: 'Cancelar a audiência', estado: estadoEscrita(r), requisicao: req });
+
+  // 3. Confirmar relendo o dia (a resposta não diz que cancelou). Na simulação, nada mudou.
+  if (!t.simulando) {
+    const rDepois = await t.enviar(reqPauta);
+    if (!rDepois.ok) {
+      registrar({ titulo: 'Conferir que saiu da pauta', estado: 'erro', requisicao: reqPauta, erro: rDepois.erro });
+      return falha('O PJe respondeu, mas não deu para reler a pauta e confirmar o cancelamento. Confira no PJe antes de qualquer outra coisa; o GIGS não foi lançado.');
+    }
+    if (naPauta(rDepois.dados, p.idAudiencia)) {
+      registrar({ titulo: 'Conferir que saiu da pauta', estado: 'erro', requisicao: reqPauta, detalhe: 'A audiência continua na pauta.' });
+      return falha('O PJe respondeu, mas a audiência continua na pauta: o cancelamento não se confirmou. Confira no PJe; o GIGS não foi lançado.');
+    }
+    registrar({ titulo: 'Conferir que saiu da pauta', estado: 'ok', requisicao: reqPauta, detalhe: 'A audiência não está mais na pauta.' });
+  }
+
+  // 4. GIGS (opcional).
+  let pendencia = '';
+  if (p.gigs && !(await lancarGigs({ idProcesso: p.idProcesso, idOrgaoLogado: p.idOrgaoLogado, hoje: p.hoje, gigs: p.gigs }, t, registrar))) {
+    pendencia = 'O GIGS não foi lançado.';
+  }
+
+  const fim = { passos, acoes: [], designou: false, recolocarFalhou: false };
+  if (t.simulando) return { desfecho: 'simulado', resumo: `Simulação concluída: nada foi gravado no PJe.${pendencia ? ` Mas: ${pendencia}` : ''}`, ...fim };
+  if (pendencia) return { desfecho: 'parcial', resumo: `Audiência cancelada, mas: ${pendencia}`, ...fim };
+  return { desfecho: 'sucesso', resumo: 'Audiência cancelada.', ...fim };
 }

@@ -7,7 +7,7 @@ import { useTipoComposto } from '../componentes/estadoTipo';
 import { avaliarData, avaliarHorario, nomeSala } from '../componentes/mensagens';
 import { usePautaDia } from '../componentes/pautaDia';
 import type { Opcoes } from '../config/opcoes';
-import type { PedidoDesignacao } from '../fluxo/executor';
+import type { PedidoDesignacao, ResultadoExecucao } from '../fluxo/executor';
 import type { Ambiente } from '../pje/ambiente';
 import { hoje } from '../regras/calendario';
 import { dataBr, gerarHash, type DadosVariaveisGigs } from '../regras/gigs';
@@ -17,13 +17,29 @@ import { useEnvio, type DadosDoEnvio } from './envio';
 const DATA = /^\d{4}-\d{2}-\d{2}$/;
 const HORA = /^\d{2}:\d{2}$/;
 
-export function useFormulario(ambiente: Ambiente, d: Dados, opcoes: Opcoes, simulando: boolean) {
-  // Sala: a da audiência antiga, se for do órgão; senão, a primeira (como um <select> sem escolha).
+/** O "+" da Pauta (D89d): sala e dia fixos; a hora, fixa no "+" da vaga e livre no "+" do dia. */
+export interface FixosFormulario {
+  idSala: number;
+  /** AAAA-MM-DD */
+  data: string;
+  /** HH:MM */
+  hora?: string;
+}
+
+export interface ExtrasFormulario {
+  fixos?: FixosFormulario;
+  /** Chamado ao fim de cada execução; `gravou` = gravou de verdade no PJe (a Pauta relê o dia). */
+  aoConcluir?: (resultado: ResultadoExecucao, gravou: boolean) => void;
+}
+
+export function useFormulario(ambiente: Ambiente, d: Dados, opcoes: Opcoes, simulando: boolean, extras: ExtrasFormulario = {}) {
+  const fixos = extras.fixos;
+  // Sala: a fixa (Pauta); senão, a da audiência antiga, se for do órgão; senão, a primeira.
   const salaAntiga = d.antiga?.salaFisica?.id;
-  const salaInicial = salaAntiga !== undefined && d.salas.some((s) => s.id === salaAntiga) ? salaAntiga : d.salas[0]?.id;
+  const salaInicial = fixos?.idSala ?? (salaAntiga !== undefined && d.salas.some((s) => s.id === salaAntiga) ? salaAntiga : d.salas[0]?.id);
   const salaId = ref(salaInicial === undefined ? '' : String(salaInicial));
-  const data = ref('');
-  const hora = ref('');
+  const data = ref(fixos?.data ?? '');
+  const hora = ref(fixos?.hora ?? '');
 
   const sala = computed(() => d.salas.find((s) => String(s.id) === salaId.value));
   const dataValida = computed(() => (DATA.test(data.value) ? data.value : null));
@@ -90,6 +106,7 @@ export function useFormulario(ambiente: Ambiente, d: Dados, opcoes: Opcoes, simu
     simulando,
     idOrgaoLogado: d.idOrgaoLogado,
     eventos: d.eventos,
+    ...(extras.aoConcluir ? { aoConcluir: extras.aoConcluir } : {}),
   });
 
   // Na ordem em que aparecem na tela.
@@ -161,6 +178,10 @@ export function useFormulario(ambiente: Ambiente, d: Dados, opcoes: Opcoes, simu
     eventos: d.eventos,
     idProcesso: d.processo.id,
     redesignacao: Boolean(d.antiga),
+    /** O que veio fixo da Pauta e não se muda aqui (D89d). */
+    salaFixa: Boolean(fixos),
+    dataFixa: Boolean(fixos),
+    horaFixa: Boolean(fixos?.hora),
     salaId,
     data,
     hora,

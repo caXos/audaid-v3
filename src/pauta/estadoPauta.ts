@@ -304,6 +304,27 @@ export function usePauta(deps: DependenciasPauta) {
     estado.meses.push(mesDaPauta(mesSeguinte(ultimo.chave)));
   }
 
+  // ── O "+" e o "×" (D89b–D89e) ────────────────────────────────────────────────────────────
+
+  /** Só no órgão logado (D5, D89) e numa sala: "Todas as salas" é só leitura (D90). */
+  const podeGravar = () => orgao()?.logado === true && typeof estado.sala === 'number';
+
+  /** D34: o dia bloqueado não tem "+" (fim de semana, suspensão de audiência ou de expediente). */
+  function diaBloqueado(dia: string): string | null {
+    if (ehFimDeSemana(dia)) return 'Fim de semana';
+    const aviso = avisoDoDia(dia);
+    return aviso?.nivel === 'bloqueia' ? aviso.texto : null;
+  }
+
+  /** Depois de gravar: esquece a pauta e o mês daquela sala e relê o dia, se estiver na tela. */
+  function relerDia(idSala: number, dia: string) {
+    estado.dias.delete(`${idSala}|${dia}`);
+    const mes = `${idSala}|${dia.slice(0, 7)}`;
+    promessasMes.delete(mes);
+    estado.codigos.delete(mes);
+    if (visiveis.has(dia)) pedirDia(dia);
+  }
+
   /** D94: as partes de uma audiência de "Todas as salas"; os advogados vão para o "(?)" da linha. */
   function pedirPartes(idProcesso: number) {
     const atual = estado.partes.get(idProcesso);
@@ -371,6 +392,10 @@ export function usePauta(deps: DependenciasPauta) {
     pedirAdvogados,
     pedirPartes,
     pedirPartesDoDia,
+    podeGravar,
+    diaBloqueado,
+    relerDia,
+    salaEscolhida,
     iniciar,
     /** Lê de novo um dia que deu erro. */
     tentarDeNovo(dia: string) {

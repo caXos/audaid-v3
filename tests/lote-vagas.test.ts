@@ -53,6 +53,8 @@ describe('lerPauta: polos e tipo (D74)', () => {
         hora: '10:00',
         tipo: 'audiencia',
         idProcesso: 9,
+        // O id da audiência, que o cancelamento da Pauta usa (D89e); a vaga não tem.
+        idAudiencia: 1,
         nrProcesso: 'nr-9',
         descricaoTipo: 'Conciliação em Conhecimento por videoconferência',
         idTipo: 18,

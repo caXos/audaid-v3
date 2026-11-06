@@ -65,6 +65,8 @@ export interface ConfiguracaoEnvio {
   simulando: boolean;
   idOrgaoLogado: number;
   eventos: EventoCalendario[];
+  /** Chamado ao fim de cada execução (o "+" da Pauta relê o dia quando gravou de verdade, D89d). */
+  aoConcluir?: (resultado: ResultadoExecucao, gravou: boolean) => void;
 }
 
 export interface DadosDoEnvio {
@@ -145,6 +147,7 @@ export function useEnvio(cfg: ConfiguracaoEnvio) {
     const gravouDeVerdade = !cfg.simulando && (resultado.desfecho === 'sucesso' || resultado.desfecho === 'parcial');
     estado.tela = { tipo: 'concluido', resultado, gravouDeVerdade };
     estado.podeCopiar = true;
+    cfg.aoConcluir?.(resultado, gravouDeVerdade);
   }
 
   /** Resposta da confirmação do envio real ("Confirmar e gravar" / "Cancelar"). */

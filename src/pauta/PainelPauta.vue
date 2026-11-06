@@ -1,15 +1,19 @@
 <script setup lang="ts">
-// A Pauta (3.2, §2.7), só leitura nesta entrega: filtros no topo (D90), lista contínua a partir de
-// hoje (D91) e a pauta de cada dia lida quando ele chega perto da tela (D92).
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+// A Pauta (3.2, §2.7): filtros no topo (D90), lista contínua a partir de hoje (D91) e a pauta de
+// cada dia lida quando ele chega perto da tela (D92). No órgão logado, numa sala, o "+" designa e o
+// "×" cancela, uma audiência por vez (D89b–D89e); nos outros órgãos e em "Todas as salas", só leitura.
+import { computed, onMounted, onUnmounted, ref, shallowRef } from 'vue';
 import CampoBusca from '../componentes/CampoBusca.vue';
 import type { OpcaoBusca } from '../componentes/opcaoBusca';
 import type { Opcoes, OrgaoConhecido } from '../config/opcoes';
 import type { Armazenamento } from '../ext/api';
+import { ESCRITA_LIBERADA } from '../fluxo/executor';
 import type { Ambiente } from '../pje/ambiente';
 import { resumoPolo } from '../lote/apresentacao';
 import type { Parte } from '../regras/partes';
+import CancelarPauta from './CancelarPauta.vue';
 import type { LeitorPauta, PartesDaAudiencia } from './dados';
+import DesignarPauta from './DesignarPauta.vue';
 import DiagnosticoPauta from './DiagnosticoPauta.vue';
 import { usePauta, type EstadoDia, type FocoPauta, type LinhaPauta } from './estadoPauta';
 import { rotuloDoDia, rotuloDoOrgao } from './orgaos';
@@ -39,6 +43,47 @@ const p = usePauta({
 const e = p.estado;
 const mostrarDiagnostico = ref(false);
 const lista = ref<HTMLElement | null>(null);
+
+// ── O "+" e o "×" (D89b–D89e) ─────────────────────────────────────────────────────────────────
+/** Como no Individual: o modo simulação das Opções, ou a escrita travada no código (D39). */
+const simulando = props.opcoes.simulacao || !ESCRITA_LIBERADA;
+type Acao =
+  | { tipo: 'designar'; sala: { id: number; nome: string }; dia: string; hora?: string }
+  | { tipo: 'cancelar'; sala: { id: number; nome: string }; dia: string; linha: LinhaPauta };
+const acao = shallowRef<Acao | null>(null);
+
+/** O que o cabeçalho diz do órgão escolhido: só leitura, simulação ou envio real. */
+const textoModo = computed(() => {
+  if (!p.orgao()?.logado) return 'só leitura: nada é gravado no PJe';
+  return simulando ? 'SIMULAÇÃO: o "+" e o "×" não gravam nada' : 'o "+" e o "×" gravam no PJe, com confirmação';
+});
+
+/** D89e: o "×" fica desabilitado, com o motivo, quando não dá para cancelar. */
+function motivoSemCancelar(l: LinhaPauta): string | null {
+  if (l.idAudiencia === undefined || l.idProcesso === undefined) return 'A pauta não trouxe o id da audiência';
+  if (!l.processo) return 'A pauta não trouxe o processo';
+  if (l.processo.orgaoId !== p.logado?.id) return `O processo tramita em outro órgão${l.processo.orgaoDescricao ? ` (${l.processo.orgaoDescricao})` : ''}: não dá para mexer na audiência (D27)`;
+  return null;
+}
+
+function abrirDesignar(dia: string, hora?: string) {
+  const sala = p.salaEscolhida();
+  if (!sala || p.diaBloqueado(dia)) return;
+  acao.value = { tipo: 'designar', sala, dia, ...(hora ? { hora } : {}) };
+}
+
+function abrirCancelar(dia: string, linha: LinhaPauta) {
+  const sala = p.salaEscolhida();
+  if (!sala || motivoSemCancelar(linha)) return;
+  acao.value = { tipo: 'cancelar', sala, dia, linha };
+}
+
+/** Gravou de verdade: relê o dia e, na redesignação, o dia de onde a audiência saiu (D89d). */
+function gravou(deOnde?: { idSala: number; dia: string }) {
+  const a = acao.value;
+  if (a) p.relerDia(a.sala.id, a.dia);
+  if (deOnde) p.relerDia(deOnde.idSala, deOnde.dia);
+}
 
 // ── Filtros ──────────────────────────────────────────────────────────────────────────────────
 const opcoesOrgao = computed<OpcaoBusca[]>(() => e.orgaos.map((o) => ({ valor: String(o.id), rotulo: rotuloDoOrgao(o), detalhe: o.nome })));
@@ -207,7 +252,7 @@ const ehDestaque = (dia: string, l: LinhaPauta) =>
           <span>logado em {{ p.logado.descricao }}</span>
         </template>
         <span class="separador">|</span>
-        <span>só leitura: nada é gravado no PJe</span>
+        <span :class="{ 'modo-real': p.orgao()?.logado && !simulando }">{{ textoModo }}</span>
         <button class="acao secundaria pequena botao-diagnostico" type="button" title="A prova técnica da Pauta (entrega 0)" @click="mostrarDiagnostico = true">
           Diagnóstico
         </button>
@@ -258,6 +303,17 @@ const ehDestaque = (dia: string, l: LinhaPauta) =>
                   <template v-for="aviso in [textoAviso(dia, d)]" :key="dia">
                     <span v-if="aviso" :class="aviso.classe"> · {{ aviso.texto }}</span>
                   </template>
+                  <!-- D89c: o "+" do dia, com o horário de início; o único caminho em sala sem vagas. Não há em dia bloqueado (D34). -->
+                  <button
+                    v-if="p.podeGravar()"
+                    class="acao secundaria pequena botao-mais-dia"
+                    type="button"
+                    :disabled="Boolean(p.diaBloqueado(dia))"
+                    :title="p.diaBloqueado(dia) ? `Dia bloqueado: ${p.diaBloqueado(dia)}` : 'Designar neste dia, com o horário de início'"
+                    @click="abrirDesignar(dia)"
+                  >
+                    + Designar
+                  </button>
                   <!-- D94: em "Todas as salas", as partes e os advogados de todas as audiências do dia. -->
                   <button
                     v-if="todasAsSalas && d.estado === 'ok' && d.linhas.length"
@@ -294,6 +350,19 @@ const ehDestaque = (dia: string, l: LinhaPauta) =>
                         <!-- O separador fica dentro do texto: espaço sozinho no começo de um elemento o Vue descarta. -->
                         <span class="selo-vaga">Vaga livre</span>
                         <span v-if="l.descricaoTipo" class="suave"> · {{ l.descricaoTipo }}</span>
+                      </td>
+                      <!-- D89c: o "+" da vaga designa nela, na hora dela. -->
+                      <td v-if="l.tipo === 'vaga' && p.podeGravar()" class="acoes-linha">
+                        <button
+                          class="acao secundaria pequena botao-mais"
+                          type="button"
+                          :disabled="Boolean(p.diaBloqueado(dia))"
+                          :title="p.diaBloqueado(dia) ? `Dia bloqueado: ${p.diaBloqueado(dia)}` : `Designar nesta vaga, às ${l.hora}`"
+                          :aria-label="`Designar nesta vaga, às ${l.hora}`"
+                          @click="abrirDesignar(dia, l.hora)"
+                        >
+                          +
+                        </button>
                       </td>
                       <template v-else>
                         <td class="numero">
@@ -345,6 +414,19 @@ const ehDestaque = (dia: string, l: LinhaPauta) =>
                           {{ l.descricaoTipo ?? '—' }}
                           <span v-if="ehDigital(l)" class="selo-digital">100% Digital</span>
                         </td>
+                        <!-- D89e: o "×" cancela; desabilitado, com o motivo, quando não dá. -->
+                        <td v-if="p.podeGravar()" class="acoes-linha">
+                          <button
+                            class="acao secundaria pequena botao-cancelar"
+                            type="button"
+                            :disabled="Boolean(motivoSemCancelar(l))"
+                            :title="motivoSemCancelar(l) ?? `Cancelar a audiência das ${l.hora}`"
+                            :aria-label="`Cancelar a audiência das ${l.hora}`"
+                            @click="abrirCancelar(dia, l)"
+                          >
+                            ×
+                          </button>
+                        </td>
                       </template>
                     </tr>
                   </table>
@@ -362,6 +444,32 @@ const ehDestaque = (dia: string, l: LinhaPauta) =>
     </div>
   </div>
   <DiagnosticoPauta v-if="mostrarDiagnostico" :ambiente="ambiente" :versao="versao" :ao-fechar="() => (mostrarDiagnostico = false)" />
+  <!-- O "+" e o "×" abrem por cima da Pauta, que fica montada e relê o dia quando gravam. -->
+  <DesignarPauta
+    v-if="acao?.tipo === 'designar' && p.logado"
+    :ambiente="ambiente"
+    :opcoes="opcoes"
+    :simulando="simulando"
+    :id-orgao-logado="p.logado.id"
+    :sala="acao.sala"
+    :dia="acao.dia"
+    :hora="acao.hora"
+    :ao-fechar="() => (acao = null)"
+    :ao-gravar="gravou"
+  />
+  <CancelarPauta
+    v-if="acao?.tipo === 'cancelar' && p.logado"
+    :ambiente="ambiente"
+    :opcoes="opcoes"
+    :simulando="simulando"
+    :id-orgao-logado="p.logado.id"
+    :descricao-orgao="p.logado.descricao"
+    :sala="acao.sala"
+    :dia="acao.dia"
+    :linha="acao.linha"
+    :ao-fechar="() => (acao = null)"
+    :ao-gravar="() => gravou()"
+  />
 </template>
 
 <style>
@@ -406,7 +514,11 @@ const ehDestaque = (dia: string, l: LinhaPauta) =>
 .tabela-pauta .numero a:hover { text-decoration: underline; }
 .tabela-pauta .tipo-linha { width: 34%; }
 .tabela-pauta .classe-linha { width: 70px; color: var(--cor-suave); }
-.botao-partes-dia { margin-left: 10px; }
+.botao-partes-dia, .botao-mais-dia { margin-left: 10px; }
+.tabela-pauta .acoes-linha { width: 40px; text-align: right; }
+.botao-mais, .botao-cancelar { min-width: 28px; font-weight: 700; }
+.botao-cancelar:not(:disabled) { color: var(--cor-erro); border-color: #e3a29c; }
+.cabecalho-pauta .modo-real { color: #8a4500; font-weight: 700; }
 .linha-vaga td { background: #fff4e5; border-top: 1px dashed #f0a35b; border-bottom: 1px dashed #f0a35b; }
 .selo-vaga { font-size: 11px; font-weight: 700; color: #a35a00; }
 .selo-digital { margin-left: 6px; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 999px; background: #e8f0fe; color: #1a56c4; white-space: nowrap; }
