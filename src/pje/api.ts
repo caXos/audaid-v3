@@ -11,6 +11,17 @@ export const caminhos = {
   pautaDia: (idSala: number, data: string) =>
     `/pje-comum-api/api/pautasaudiencias/classificacoes/dia?idSalaAudiencia=${idSala}&data=${data}`,
   calendario: (idOrgao: number) => `/pje-comum-api/api/calendarioeventos?oj=${idOrgao}`,
+  // Pauta (3.2). Leituras da v1, a confirmar pela prova técnica (D86b, blueprint §3).
+  /** Os perfis do usuário: um por órgão e papel, com o `idOrgaoJulgador` (D87b). */
+  perfis: () => '/pje-seguranca/api/token/perfis',
+  /** O mês da sala, dia a dia (a v1 lia `tipo: "F"` = dia não útil). `mes` de 1 a 12. */
+  pautaMes: (idSala: number, ano: number, mes: number) =>
+    `/pje-comum-api/api/pautasaudiencias/classificacoes?idSala=${idSala}&ano=${ano}&mes=${mes}`,
+  /** As audiências do órgão num período, numa consulta só (AUD4; pede o token como Bearer). */
+  pautasDoOrgao: (idOrgao: number, inicio: string, fim: string) =>
+    `/audapi/rest/pje/audpje/pautas?dataInicio=${inicio}&dataFim=${fim}&orgaoJulgador=${idOrgao}`,
+  /** Os órgãos do tribunal, com `nomeMunicipio` (AUD4; pede o token como Bearer). */
+  orgaosDoTribunal: () => '/audapi/rest/pje/audpje/oj',
 };
 
 export interface OrgaoJulgador {

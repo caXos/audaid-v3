@@ -64,6 +64,8 @@ export function viasDisponiveis(): Via[] {
 export interface OpcoesGet {
   xsrfToken?: string;
   via?: Via;
+  /** O `access_token` do PJe, enviado como `Authorization: Bearer`: o AUD4 (`audapi`) autentica assim. */
+  bearer?: string;
 }
 
 export type Metodo = 'GET' | 'POST' | 'PUT' | 'PATCH';
@@ -90,6 +92,7 @@ async function pjeRequisicao<T>(metodo: Metodo, url: string, corpo: unknown, opc
 
   const headers: Record<string, string> = { Accept: 'application/json, text/plain, */*' };
   if (opcoes.xsrfToken) headers['X-XSRF-TOKEN'] = opcoes.xsrfToken;
+  if (opcoes.bearer) headers['Authorization'] = `Bearer ${opcoes.bearer}`;
   const init: RequestInit = { method: metodo, credentials: 'include', headers };
   if (metodo !== 'GET') {
     headers['Content-Type'] = 'application/json';
