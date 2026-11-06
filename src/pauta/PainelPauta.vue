@@ -171,8 +171,8 @@ const ehDestaque = (dia: string, l: LinhaPauta) =>
 </script>
 
 <template>
-  <DiagnosticoPauta v-if="mostrarDiagnostico" :ambiente="ambiente" :versao="versao" :ao-fechar="() => (mostrarDiagnostico = false)" />
-  <div v-else class="pauta-fundo">
+  <!-- O diagnóstico abre por cima: a Pauta fica montada, com a lista e o que já foi lido. -->
+  <div class="pauta-fundo">
     <div class="pauta-janela" role="dialog" aria-label="AudAid, Pauta">
       <header class="cabecalho cabecalho-pauta">
         <h1>AudAid · Pauta</h1>
@@ -291,6 +291,7 @@ const ehDestaque = (dia: string, l: LinhaPauta) =>
       </template>
     </div>
   </div>
+  <DiagnosticoPauta v-if="mostrarDiagnostico" :ambiente="ambiente" :versao="versao" :ao-fechar="() => (mostrarDiagnostico = false)" />
 </template>
 
 <style>

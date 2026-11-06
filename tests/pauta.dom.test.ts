@@ -334,3 +334,17 @@ describe('Pauta (3.2, entrega 1)', () => {
     expect(vi.mocked(fetch).mock.calls.every(([, init]) => (init as RequestInit).method === 'GET')).toBe(true);
   });
 });
+
+describe('o diagnóstico dentro da Pauta', () => {
+  it('abre por cima e, ao fechar, a lista é a mesma e continua carregando os dias', async () => {
+    const { raiz, mostrar, dia } = await abrir();
+    const lista = raiz.querySelector('.lista-pauta');
+    [...raiz.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Diagnóstico')!.click();
+    await vi.waitFor(() => expect(raiz.textContent).toContain('AudAid · Pauta · diagnóstico'));
+    [...raiz.querySelectorAll<HTMLButtonElement>('.pauta-janela .fechar')].at(-1)!.click();
+    await vi.waitFor(() => expect(raiz.textContent).not.toContain('AudAid · Pauta · diagnóstico'));
+    expect(raiz.querySelector('.lista-pauta')).toBe(lista);
+    await mostrar([D1]);
+    await vi.waitFor(() => expect(dia(D1).textContent).toContain('AUTOR 11'));
+  });
+});

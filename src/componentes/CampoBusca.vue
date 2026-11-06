@@ -34,9 +34,10 @@ function fechar() {
   filtro.value = '';
 }
 
+/** Escolher a mesma opção também avisa: no mês, é o jeito de voltar ao começo dele (D91). */
 function escolher(o: OpcaoBusca) {
   fechar();
-  if (o.valor !== props.modelValue) emit('update:modelValue', o.valor);
+  emit('update:modelValue', o.valor);
 }
 
 function aoDigitar(ev: Event) {
