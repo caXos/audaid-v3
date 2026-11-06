@@ -4,9 +4,11 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { nextTick } from 'vue';
+import { RaizVue } from '../src/componentes/montar';
 import { opcoesPadrao } from '../src/config/opcoes';
-import { ControlePauta } from '../src/pauta/ControlePauta';
+import DiagnosticoPauta from '../src/pauta/DiagnosticoPauta.vue';
 import { lerAmbiente } from '../src/pje/ambiente';
+import { CSS } from '../src/prova/estilo';
 import { Fab } from '../src/ui/fab';
 import calendario from './fixtures/calendario-cejusc.json';
 
@@ -88,12 +90,14 @@ beforeEach(() => {
 
 afterEach(() => vi.unstubAllGlobals());
 
+/** Desde a entrega 1, o diagnóstico abre pelo botão "Diagnóstico" da Pauta; aqui, direto. */
 function abrir() {
-  const pauta = new ControlePauta(ambiente, '3.2.0');
-  pauta.abrir();
-  const raiz = document.getElementById('audaid-v3-pauta')!.shadowRoot!;
+  const host = document.createElement('div');
+  document.body.append(host);
+  new RaizVue(host, CSS).montar(DiagnosticoPauta, { ambiente, versao: '3.2.0', aoFechar: () => {} });
+  const raiz = host.shadowRoot!;
   const relatorio = () => raiz.querySelector('textarea')?.value ?? '';
-  return { pauta, raiz, relatorio };
+  return { raiz, relatorio };
 }
 
 const terminou = (texto: string) => texto.includes('## Outro órgão (49): audiências do órgão');

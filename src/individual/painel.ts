@@ -3,6 +3,7 @@
 
 import { RaizVue } from '../componentes/montar';
 import type { Opcoes } from '../config/opcoes';
+import type { FocoPauta } from '../pauta/estadoPauta';
 import type { Ambiente } from '../pje/ambiente';
 import { CSS } from '../prova/estilo';
 import PainelIndividual from './PainelIndividual.vue';
@@ -17,6 +18,8 @@ export class ControleIndividual {
     private readonly aoAbrirDiagnostico: () => void,
     /** Link "Abrir controle em lote" (D1). */
     private readonly aoAbrirLote: () => void,
+    /** Botão "Abrir a pauta" (D88), no dia da próxima audiência do processo, se houver (D90). */
+    private readonly aoAbrirPauta: (foco?: FocoPauta) => void = () => {},
   ) {
     this.host.id = 'audaid-v3-individual';
     // O CSS base (cores, painel, cartões) é o mesmo do painel de diagnóstico, que continua sem Vue.
@@ -57,6 +60,7 @@ export class ControleIndividual {
       aoFechar: () => this.fechar(),
       aoAbrirDiagnostico: this.aoAbrirDiagnostico,
       aoAbrirLote: this.aoAbrirLote,
+      aoAbrirPauta: this.aoAbrirPauta,
     });
   }
 }

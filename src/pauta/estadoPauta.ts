@@ -1,0 +1,279 @@
+// O estado da Pauta (3.2, §2.7): órgãos, sala, horizonte de meses e a pauta de cada dia, lida só
+// quando o dia chega perto da tela (D92). Nada aqui grava no PJe.
+
+import { reactive } from 'vue';
+import type { Opcoes, OrgaoConhecido } from '../config/opcoes';
+import type { Armazenamento } from '../ext/api';
+import type { Ambiente } from '../pje/ambiente';
+import type { Audiencia, EventoCalendario } from '../pje/api';
+import { pjeGet } from '../pje/http';
+import { lerCookie, lerSessao } from '../pje/sessao';
+import { classificarData, hoje } from '../regras/calendario';
+import type { EntradaPauta } from '../regras/pauta';
+import { carregarAdvogados, carregarCalendario, carregarDia, carregarOrgaos, type LeitorPauta } from './dados';
+import { FilaDeLeitura } from './fila';
+import { mesDaPauta, mesesDoHorizonte, mesSeguinte, rotuloDoOrgao, type MesPauta, type OrgaoPauta } from './orgaos';
+
+/** Onde abrir a Pauta pelo "Abrir a pauta" do Individual (D90): a próxima audiência do processo. */
+export interface FocoPauta {
+  idSala: number;
+  dia: string;
+  idProcesso?: number;
+}
+
+/**
+ * D90: pelo "Abrir a pauta" do Individual, a Pauta abre na sala e no dia da próxima audiência
+ * designada do processo no órgão logado. Sem ela, abre como pelo FAB.
+ */
+export function focoDoProcesso(audiencias: Audiencia[], idOrgaoLogado: number, idProcesso: number, hojeIso = hoje()): FocoPauta | undefined {
+  const proxima = [...audiencias]
+    .sort((a, b) => a.dataInicio.localeCompare(b.dataInicio))
+    .find((a) => a.status === 'Designada' && a.salaFisica?.orgaoJulgador?.id === idOrgaoLogado && a.dataInicio.slice(0, 10) >= hojeIso);
+  return proxima?.salaFisica ? { idSala: proxima.salaFisica.id, dia: proxima.dataInicio.slice(0, 10), idProcesso } : undefined;
+}
+
+export type ChaveSala = number | 'todas';
+
+/** Uma linha da lista: a entrada da pauta e, em "Todas as salas", a sala. */
+export interface LinhaPauta extends EntradaPauta {
+  sala?: string;
+}
+
+export interface EstadoDia {
+  estado: 'espera' | 'carregando' | 'ok' | 'erro';
+  linhas: LinhaPauta[];
+  erro?: string;
+}
+
+/** Onde fica a última sala usada em cada órgão (D90). */
+export const CHAVE_SALAS = 'audaid-pauta-salas';
+/** Limite de meses que "Carregar mais um mês" e o foco podem acrescentar (dois anos). */
+const MESES_MAXIMOS = 24;
+
+export function leitorDoPje(ambiente: Ambiente): LeitorPauta {
+  return (caminho, opcoes) => {
+    // O token e o xsrf são lidos na hora: o PJe os renova sozinho.
+    const bearer = opcoes?.bearer ? lerCookie(document.cookie, 'access_token') : undefined;
+    return pjeGet(ambiente.origem + caminho, { xsrfToken: lerSessao(document.cookie).xsrfToken, ...(bearer ? { bearer } : {}) });
+  };
+}
+
+export interface DependenciasPauta {
+  ambiente: Ambiente;
+  opcoes: Opcoes;
+  armazenamento: Armazenamento;
+  foco?: FocoPauta;
+  /** Guarda os órgãos mostrados, para a lista do "Ocultar da Pauta" nas Opções (D87b). */
+  aoConhecerOrgaos?: (orgaos: OrgaoConhecido[]) => void;
+  /** Só nos testes: um PJe falso e o dia de hoje. */
+  ler?: LeitorPauta;
+  hoje?: string;
+}
+
+export function usePauta(deps: DependenciasPauta) {
+  const ler = deps.ler ?? leitorDoPje(deps.ambiente);
+  const hojeIso = deps.hoje ?? hoje();
+  const fila = new FilaDeLeitura();
+  const logado = lerSessao(document.cookie).orgaoLogado;
+
+  const estado = reactive({
+    carregando: true,
+    /** Erro que impede a Pauta de abrir (sem órgão logado). */
+    erro: '',
+    avisos: [] as string[],
+    orgaos: [] as OrgaoPauta[],
+    idOrgao: null as number | null,
+    sala: null as ChaveSala | null,
+    meses: mesesDoHorizonte(hojeIso, deps.opcoes.pauta.mesesAFrente) as MesPauta[],
+    /** O mês no alto da lista: a combobox do mês o acompanha (D91). */
+    mesVisivel: hojeIso.slice(0, 7),
+    destaque: deps.foco ?? null as FocoPauta | null,
+    /** `${idSala}|${dia}` → a pauta daquela sala naquele dia. */
+    dias: new Map<string, EstadoDia>(),
+    calendarios: new Map<number, EventoCalendario[]>(),
+    /** idProcesso → texto do "(?)", ou `null` enquanto carrega. */
+    advogados: new Map<number, string | null>(),
+  });
+  /** Os dias perto da tela agora: "Atualizar" e as trocas de órgão ou sala os leem de novo. */
+  const visiveis = new Set<string>();
+  /** Muda a cada "Atualizar": resposta de antes não sobrescreve a nova. */
+  let geracao = 0;
+
+  const orgao = () => estado.orgaos.find((o) => o.id === estado.idOrgao);
+
+  function salasDaSelecao(): { id: number; nome: string }[] {
+    const o = orgao();
+    if (!o || estado.sala === null) return [];
+    return estado.sala === 'todas' ? o.salas : o.salas.filter((s) => s.id === estado.sala);
+  }
+
+  function pedirSalaDia(idSala: number, dia: string) {
+    const chave = `${idSala}|${dia}`;
+    if (estado.dias.has(chave)) return;
+    estado.dias.set(chave, { estado: 'carregando', linhas: [] });
+    const minha = geracao;
+    void fila
+      .executar(() => carregarDia(ler, idSala, dia))
+      .then(
+        (linhas) => {
+          if (minha === geracao) estado.dias.set(chave, { estado: 'ok', linhas });
+        },
+        (e: unknown) => {
+          if (minha === geracao) estado.dias.set(chave, { estado: 'erro', linhas: [], erro: e instanceof Error ? e.message : String(e) });
+        },
+      );
+  }
+
+  function pedirCalendario(idOrgao: number) {
+    if (estado.calendarios.has(idOrgao)) return;
+    estado.calendarios.set(idOrgao, []);
+    void fila.executar(() => carregarCalendario(ler, idOrgao)).then((eventos) => estado.calendarios.set(idOrgao, eventos));
+  }
+
+  /** Um dia chegou perto da tela: lê a pauta dele em cada sala da seleção (D92). */
+  function pedirDia(dia: string) {
+    const o = orgao();
+    if (!o) return;
+    pedirCalendario(o.id);
+    for (const s of salasDaSelecao()) pedirSalaDia(s.id, dia);
+  }
+
+  function marcarVisivel(dia: string, visivel: boolean) {
+    if (visivel) visiveis.add(dia);
+    else visiveis.delete(dia);
+  }
+
+  const pedirVisiveis = () => [...visiveis].sort().forEach(pedirDia);
+
+  /** A pauta do dia na seleção atual; em "Todas as salas", as salas juntas, pela hora. */
+  function diaDaSelecao(dia: string): EstadoDia {
+    const salas = salasDaSelecao();
+    const estados = salas.map((s) => ({ s, e: estado.dias.get(`${s.id}|${dia}`) }));
+    if (!salas.length || estados.some(({ e }) => !e || e.estado === 'espera')) return { estado: 'espera', linhas: [] };
+    if (estados.some(({ e }) => e!.estado === 'carregando')) return { estado: 'carregando', linhas: [] };
+    const erros = estados.filter(({ e }) => e!.estado === 'erro');
+    if (erros.length === estados.length) return { estado: 'erro', linhas: [], erro: erros[0]!.e!.erro };
+    const todas = estado.sala === 'todas';
+    const linhas = estados
+      .flatMap(({ s, e }) => e!.linhas.map((l) => (todas ? { ...l, sala: s.nome } : l)))
+      .sort((a, b) => a.hora.localeCompare(b.hora) || (a.sala ?? '').localeCompare(b.sala ?? ''));
+    // Em "Todas as salas", uma sala com erro não esconde as outras, mas avisa.
+    return erros.length ? { estado: 'ok', linhas, erro: `Não foi possível ler: ${erros.map(({ s }) => s.nome).join(', ')}` } : { estado: 'ok', linhas };
+  }
+
+  /** O aviso do calendário do órgão para o dia (D34): feriado ou suspensão bloqueia; só prazo, avisa. */
+  function avisoDoDia(dia: string): { nivel: 'bloqueia' | 'avisa'; texto: string } | null {
+    const eventos = estado.idOrgao === null ? undefined : estado.calendarios.get(estado.idOrgao);
+    if (!eventos?.length) return null;
+    const c = classificarData(dia, eventos);
+    if (c.nivel === 'bloqueia') return { nivel: 'bloqueia', texto: c.bloqueios.join('; ') };
+    if (c.nivel === 'avisa') return { nivel: 'avisa', texto: c.avisos.join('; ') };
+    return null;
+  }
+
+  async function lerSalasLembradas(): Promise<Record<string, ChaveSala>> {
+    try {
+      const v = await deps.armazenamento.ler(CHAVE_SALAS);
+      return v && typeof v === 'object' ? (v as Record<string, ChaveSala>) : {};
+    } catch {
+      return {};
+    }
+  }
+
+  async function escolherOrgao(id: number, sala?: ChaveSala) {
+    const o = estado.orgaos.find((x) => x.id === id);
+    if (!o) return;
+    estado.idOrgao = id;
+    const lembrada = sala ?? (await lerSalasLembradas())[String(id)];
+    const valida = lembrada === 'todas' || o.salas.some((s) => s.id === lembrada);
+    estado.sala = valida && lembrada !== undefined ? lembrada : (o.salas[0]?.id ?? null);
+    pedirVisiveis();
+  }
+
+  async function escolherSala(sala: ChaveSala) {
+    estado.sala = sala;
+    pedirVisiveis();
+    if (estado.idOrgao === null) return;
+    const lembradas = await lerSalasLembradas();
+    try {
+      await deps.armazenamento.gravar(CHAVE_SALAS, { ...lembradas, [String(estado.idOrgao)]: sala });
+    } catch {
+      // Não lembrar a sala não impede nada.
+    }
+  }
+
+  /** "Atualizar" (D92): esquece o que foi lido do órgão e relê os dias perto da tela. */
+  function atualizar() {
+    const o = orgao();
+    if (!o) return;
+    geracao++;
+    const salas = new Set(o.salas.map((s) => s.id));
+    for (const chave of [...estado.dias.keys()]) if (salas.has(Number(chave.split('|')[0]))) estado.dias.delete(chave);
+    estado.calendarios.delete(o.id);
+    pedirVisiveis();
+  }
+
+  function carregarMaisUmMes() {
+    if (estado.meses.length >= MESES_MAXIMOS) return;
+    const ultimo = estado.meses[estado.meses.length - 1]!;
+    estado.meses.push(mesDaPauta(mesSeguinte(ultimo.chave)));
+  }
+
+  function pedirAdvogados(idProcesso: number) {
+    if (estado.advogados.has(idProcesso)) return;
+    estado.advogados.set(idProcesso, null);
+    void fila.executar(() => carregarAdvogados(ler, idProcesso)).then((texto) => estado.advogados.set(idProcesso, texto));
+  }
+
+  async function iniciar() {
+    if (!logado) {
+      estado.erro = 'Não foi possível identificar o órgão em que você está logado (o token do PJe não está legível). Recarregue o PJe e tente de novo.';
+      estado.carregando = false;
+      return;
+    }
+    try {
+      const r = await carregarOrgaos(ler, logado, deps.opcoes.pauta.ocultos, fila);
+      estado.orgaos = r.orgaos;
+      estado.avisos = r.avisos;
+      deps.aoConhecerOrgaos?.(r.orgaos.map((o) => ({ id: o.id, rotulo: rotuloDoOrgao(o), nome: o.nome })));
+      const foco = deps.foco;
+      if (foco) {
+        // O horizonte cresce até o mês da audiência, se ela estiver além dele.
+        while (estado.meses[estado.meses.length - 1]!.chave < foco.dia.slice(0, 7) && estado.meses.length < MESES_MAXIMOS) carregarMaisUmMes();
+        estado.mesVisivel = foco.dia.slice(0, 7);
+      }
+      await escolherOrgao(logado.id, foco?.idSala);
+    } catch (e) {
+      estado.erro = `Erro ao abrir a Pauta: ${e instanceof Error ? e.message : String(e)}`;
+    } finally {
+      estado.carregando = false;
+    }
+  }
+
+  return {
+    estado,
+    logado,
+    hojeIso,
+    orgao,
+    diaDaSelecao,
+    avisoDoDia,
+    pedirDia,
+    marcarVisivel,
+    escolherOrgao,
+    escolherSala,
+    atualizar,
+    carregarMaisUmMes,
+    pedirAdvogados,
+    iniciar,
+    /** Lê de novo um dia que deu erro. */
+    tentarDeNovo(dia: string) {
+      for (const s of salasDaSelecao()) {
+        const chave = `${s.id}|${dia}`;
+        if (estado.dias.get(chave)?.estado === 'erro') estado.dias.delete(chave);
+      }
+      pedirDia(dia);
+    },
+  };
+}
+
+export type Pauta = ReturnType<typeof usePauta>;

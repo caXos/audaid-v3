@@ -1,7 +1,8 @@
 // Content script: roda em toda página `pjekz/*` dos TRTs (ver scripts/manifest.mjs).
 // O PJe é uma SPA, então a troca de tela não recarrega a página: a URL é observada a cada segundo.
 
-import { aoMudarArmazenado, armazenamentoDaExtensao, enviarMensagem, lerArmazenado, type Armazenado } from './ext/api';
+import type { OrgaoConhecido } from './config/opcoes';
+import { aoMudarArmazenado, armazenamentoDaExtensao, enviarMensagem, lerArmazenado, salvarOpcoes, type Armazenado } from './ext/api';
 import { ControleIndividual } from './individual/painel';
 import { ControleLote } from './lote/ControleLote';
 import { ControlePauta } from './pauta/ControlePauta';
@@ -11,10 +12,25 @@ import { Fab, v1Presente } from './ui/fab';
 
 const ambiente = lerAmbiente(location.href);
 
+/**
+ * D87b: as Opções não leem o PJe, então a Pauta guarda os órgãos que mostrou, para a lista do
+ * "Ocultar da Pauta". Os que já estavam ficam (um órgão oculto não aparece mais na Pauta, mas
+ * precisa continuar na lista para poder voltar).
+ */
+async function guardarOrgaosConhecidos(orgaos: OrgaoConhecido[]) {
+  const atual = await lerArmazenado(__AUDAID_DEV__);
+  const antes = atual.opcoes.pauta.orgaos;
+  const porId = new Map(antes.map((o) => [o.id, o]));
+  for (const o of orgaos) porId.set(o.id, o);
+  const lista = [...porId.values()];
+  if (JSON.stringify(lista) === JSON.stringify(antes)) return;
+  await salvarOpcoes({ ...atual.opcoes, pauta: { ...atual.opcoes.pauta, orgaos: lista } });
+}
+
 if (ambiente && !document.getElementById('audaid-v3-fab')) {
   const diagnostico = new ProvaTecnica(ambiente);
   const lote = new ControleLote(ambiente, __AUDAID_VERSAO__, armazenamentoDaExtensao);
-  const pauta = new ControlePauta(ambiente, __AUDAID_VERSAO__);
+  const pauta = new ControlePauta(ambiente, __AUDAID_VERSAO__, armazenamentoDaExtensao, (orgaos) => void guardarOrgaosConhecidos(orgaos));
   const individual = new ControleIndividual(
     ambiente,
     () => {
@@ -26,6 +42,11 @@ if (ambiente && !document.getElementById('audaid-v3-fab')) {
       // D1: dentro do processo, o lote abre pelo link do Individual.
       individual.fechar();
       if (estado?.aceite) lote.abrir(estado.opcoes);
+    },
+    (foco) => {
+      // D88: "Abrir a pauta" no Individual, no dia da próxima audiência do processo (D90).
+      individual.fechar();
+      if (estado?.aceite) pauta.abrir(estado.opcoes, foco);
     },
   );
   let estado: Armazenado | null = null;
@@ -52,8 +73,13 @@ if (ambiente && !document.getElementById('audaid-v3-fab')) {
         return;
       }
       fab.alternarMenu([
-        // Entrega 0 da 3.2: a Pauta ainda é o diagnóstico (D86b).
-        { rotulo: 'Pauta', titulo: 'A pauta dos seus órgãos (por enquanto, o diagnóstico da Pauta: só leitura)', acao: () => pauta.abrir() },
+        {
+          rotulo: 'Pauta',
+          titulo: 'A pauta dos seus órgãos, salas e dias',
+          acao: () => {
+            if (estado?.aceite) pauta.abrir(estado.opcoes);
+          },
+        },
         {
           rotulo: 'Controle em Lote',
           titulo: 'Montar a pauta de um dia inteiro',

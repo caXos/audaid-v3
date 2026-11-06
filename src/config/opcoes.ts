@@ -41,12 +41,29 @@ export interface SugestaoGigs {
   prazo: number;
 }
 
+/** Um órgão que a Pauta já mostrou: as Opções o listam para "Ocultar da Pauta" (D87b). */
+export interface OrgaoConhecido {
+  id: number;
+  /** Sigla e código, como na Pauta ("1 VTCSV · 0071"). */
+  rotulo: string;
+  nome: string;
+}
+
 export interface Opcoes {
   fab: { posicao: PosicaoFab; estilo: EstiloFab };
   /** Sugestões editáveis. A opção vazia (não lançar) e "Outro" são fixas e não ficam aqui. */
   gigs: { sugestoes: SugestaoGigs[] };
   /** Conjuntos de regras do Auto organizar do Lote (D48, §2.6). O nome de cada um é automático. */
   organizar: { conjuntos: ConjuntoRegras[] };
+  /** Pauta (3.2, §2.7). */
+  pauta: {
+    /** O horizonte da lista contínua, contando o mês atual (D91). */
+    mesesAFrente: number;
+    /** Órgãos que não aparecem na Pauta (D87b). O órgão logado aparece sempre (D87). */
+    ocultos: number[];
+    /** Os órgãos que a Pauta já mostrou, para a lista do "Ocultar" (a página de Opções não lê o PJe). */
+    orgaos: OrgaoConhecido[];
+  };
   /** Modo simulação (D39): mostra as requisições de escrita sem enviar. */
   simulacao: boolean;
 }
@@ -57,6 +74,10 @@ export const LIMITES = {
   prazo: { min: 0, max: 240 },
   /** Limite do campo Observação do GIGS no PJe ("0 / 4000" no formulário nativo). */
   textoGigs: 4000,
+  /** "Meses à frente" da Pauta (D89, D91). */
+  mesesAFrente: { min: 1, max: 12 },
+  /** Órgãos guardados para as Opções: folga para qualquer usuário real. */
+  orgaosConhecidos: 300,
 } as const;
 
 export function opcoesPadrao(desenvolvimento: boolean): Opcoes {
@@ -81,6 +102,8 @@ export function opcoesPadrao(desenvolvimento: boolean): Opcoes {
     },
     // Pré-cadastro (D48e, D64).
     organizar: { conjuntos: CONJUNTOS_PADRAO.map((c) => ({ criterios: c.criterios.map((k) => ({ ...k })) })) },
+    // D91: o mês atual + 5.
+    pauta: { mesesAFrente: 6, ocultos: [], orgaos: [] },
     simulacao: desenvolvimento,
   };
 }
@@ -113,6 +136,16 @@ export function normalizarOpcoes(bruto: unknown, desenvolvimento: boolean): Opco
   const borda = objeto(est['borda']);
   const gigs = objeto(o['gigs']);
   const organizar = objeto(o['organizar']);
+  const pauta = objeto(o['pauta']);
+  const idValido = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v > 0;
+  const ocultos = Array.isArray(pauta['ocultos']) ? [...new Set((pauta['ocultos'] as unknown[]).filter(idValido))] : p.pauta.ocultos;
+  const orgaos = Array.isArray(pauta['orgaos'])
+    ? (pauta['orgaos'] as unknown[])
+        .map(objeto)
+        .filter((g) => idValido(g['id']) && typeof g['rotulo'] === 'string' && typeof g['nome'] === 'string')
+        .slice(0, LIMITES.orgaosConhecidos)
+        .map((g) => ({ id: g['id'] as number, rotulo: (g['rotulo'] as string).trim(), nome: (g['nome'] as string).trim() }))
+    : p.pauta.orgaos;
 
   const posicao = POSICOES_FAB.includes(fab['posicao'] as PosicaoFab) ? (fab['posicao'] as PosicaoFab) : p.fab.posicao;
 
@@ -148,6 +181,11 @@ export function normalizarOpcoes(bruto: unknown, desenvolvimento: boolean): Opco
     },
     gigs: { sugestoes },
     organizar: { conjuntos },
+    pauta: {
+      mesesAFrente: inteiro(pauta['mesesAFrente'], p.pauta.mesesAFrente, LIMITES.mesesAFrente.min, LIMITES.mesesAFrente.max),
+      ocultos,
+      orgaos,
+    },
     simulacao: booleano(o['simulacao'], p.simulacao),
   };
 }
