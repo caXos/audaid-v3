@@ -83,6 +83,30 @@ function mesDaSala(idSala: string, ano: number, mes: number) {
   });
 }
 
+/** O `audpje/pautas` (D92b), na forma da prova técnica de 06/11/2026: sem partes, vagas nem 100% Digital. */
+const aud4 = (idProcesso: number, quando: string, idSala: number, nomeSala: string, classe: string) => ({
+  numeroProcesso: `00001${idProcesso}-52.2026.5.09.0001`,
+  idProcessoAudiencia: 8000 + idProcesso,
+  idProcesso,
+  classeJudicial: classe === 'ATOrd' ? 'Ação Trabalhista - Rito Ordinário' : 'Ação Trabalhista - Rito Sumaríssimo',
+  siglaClasseJudicial: classe,
+  idOrgaoJulgador: 174,
+  vara: 3603,
+  idTipoAudiencia: 3,
+  tipoAudiencia: 'Conciliação em Conhecimento',
+  dataAudiencia: quando,
+  anoProcesso: 2026,
+  valorCausa: 1000,
+  idSala,
+  nomeSala,
+});
+const AUD4 = [
+  aud4(11, `${D1}T09:00:00`, 503, 'Sala 01 Cejusc-CSC', 'ATSum'),
+  aud4(12, `${D1}T08:30:00`, 504, 'Sala 02 Cejusc-CSC', 'ATOrd'),
+  aud4(13, `${D2}T14:00:00`, 503, 'Sala 01 Cejusc-CSC', 'ATOrd'),
+  aud4(16, '2026-11-15T10:00:00', 504, 'Sala 02 Cejusc-CSC', 'ATOrd'),
+];
+
 let perfisFalham = false;
 let mesFalha = false;
 const lidos: string[] = [];
@@ -103,6 +127,12 @@ async function responder(url: string, init?: RequestInit): Promise<Response> {
       return json([174, 77, 49, 63, 50, 174].map((id) => ({ idOrgaoJulgador: id })));
     }
     if (u.pathname.endsWith('/audpje/oj')) return json(TRIBUNAL);
+    if (u.pathname.endsWith('/audpje/pautas')) {
+      const de = u.searchParams.get('dataInicio') ?? '';
+      const ate = u.searchParams.get('dataFim') ?? '';
+      const oj = Number(u.searchParams.get('orgaoJulgador'));
+      return json(AUD4.filter((a) => a.idOrgaoJulgador === oj && a.dataAudiencia.slice(0, 10) >= de && a.dataAudiencia.slice(0, 10) <= ate));
+    }
     if (u.pathname.endsWith('/salasaudiencias')) return json(SALAS[Number(u.searchParams.get('idOrgaoJulgador'))] ?? []);
     if (u.pathname.endsWith('/calendarioeventos')) {
       return json([{ id: 1, descricao: 'Feriado municipal', dataInicio: D3, dataFim: D3, feriado: true, suspendeAudiencia: true }]);
@@ -271,16 +301,37 @@ describe('Pauta (3.2, entrega 1)', () => {
     expect(leiturasDoDia().some((l) => l.includes('idSalaAudiencia=162'))).toBe(true);
   });
 
-  it('"Todas as salas" junta as salas pela hora, com o nome de cada uma', async () => {
-    const { mostrar, escolher, dia } = await abrir();
-    await mostrar([D1]);
+  it('"Todas as salas" (D92b): o órgão inteiro pelo AUD4, um mês por consulta, sem partes nem vagas', async () => {
+    const { raiz, mostrar, escolher, dia, opcoesDe } = await abrir();
+    const detalhes = async () => {
+      const campo = raiz.querySelector<HTMLInputElement>('#pauta-sala')!;
+      campo.dispatchEvent(new Event('focus'));
+      await nextTick();
+      const d = [...raiz.querySelectorAll('#pauta-sala-lista .detalhe-opcao')].map((x) => x.textContent);
+      campo.dispatchEvent(new Event('blur'));
+      return d;
+    };
+    expect(await opcoesDe('pauta-sala')).toEqual(['Sala 01 Cejusc-CSC', 'Sala 02 Cejusc-CSC', 'Todas as salas']);
+    expect(await detalhes()).toEqual(['visão geral, sem partes nem vagas']);
+    await mostrar([D1, D2]);
+    await vi.waitFor(() => expect(leiturasDoDia()).toHaveLength(2));
     await escolher('pauta-sala', 'todas');
-    await vi.waitFor(() => expect(dia(D1).textContent).toContain('2 audiências · 1 vaga livre'));
+    await vi.waitFor(() => expect(dia(D1).textContent).toContain('2 audiências'));
+    expect(dia(D1).textContent).not.toContain('vaga');
     const linhas = [...dia(D1).querySelectorAll('tr')].map((tr) => tr.textContent ?? '');
-    expect(linhas[0]).toContain('08:30');
-    expect(linhas[0]).toContain('Sala 02 Cejusc-CSC');
-    expect(linhas[1]).toContain('09:00');
-    expect(linhas[1]).toContain('Sala 01 Cejusc-CSC');
+    expect(linhas).toHaveLength(2);
+    expect(linhas[0]).toMatch(/08:30.*Sala 02 Cejusc-CSC.*0000112-52.*ATOrd.*Conciliação em Conhecimento/);
+    expect(linhas[1]).toMatch(/09:00.*Sala 01 Cejusc-CSC.*0000111-52.*ATSum/);
+    // Sem partes e sem "(?)": o AUD4 não diz se o processo é segredo de justiça.
+    expect(dia(D1).querySelector('.botao-ajuda')).toBeNull();
+    expect(dia(D1).textContent).not.toContain('AUTOR');
+    // Uma consulta para o mês inteiro, de hoje ao fim do mês, e nenhuma pauta do dia a mais.
+    expect(lidos.filter((l) => l.includes('/audpje/pautas')).at(-1)).toBe('/audapi/rest/pje/audpje/pautas?dataInicio=2026-11-09&dataFim=2026-11-30&orgaoJulgador=174');
+    expect(leiturasDoDia()).toHaveLength(2);
+    // O domingo com audiência aparece; o dia sem nada diz que não há audiência em nenhuma sala.
+    await vi.waitFor(() => expect(raiz.querySelector('[data-dia="2026-11-15"]')).not.toBeNull());
+    await mostrar(['2026-11-12']);
+    await vi.waitFor(() => expect(dia('2026-11-12').textContent).toContain('Não há audiências neste dia em nenhuma sala'));
   });
 
   it('os advogados só são lidos quando pedidos, no "(?)" (D61, D92)', async () => {

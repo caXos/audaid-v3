@@ -44,7 +44,8 @@ const opcoesSala = computed<OpcaoBusca[]>(() => {
   const o = p.orgao();
   if (!o) return [];
   const salas = o.salas.map((s) => ({ valor: String(s.id), rotulo: s.nome }));
-  return o.salas.length > 1 ? [...salas, { valor: 'todas', rotulo: 'Todas as salas', detalhe: 'só leitura' }] : salas;
+  // D92b: a visão geral do órgão, pelo AUD4; o detalhe diz o que ela não traz, sem faixa nova na tela.
+  return o.salas.length > 1 ? [...salas, { valor: 'todas', rotulo: 'Todas as salas', detalhe: 'visão geral, sem partes nem vagas' }] : salas;
 });
 const opcoesMes = computed<OpcaoBusca[]>(() => e.meses.map((m) => ({ valor: m.chave, rotulo: m.rotulo })));
 
@@ -141,8 +142,11 @@ function resumoDoDia(d: EstadoDia): string {
   if (d.estado === 'erro') return 'erro ao consultar';
   const aud = d.linhas.filter((l) => l.tipo === 'audiencia').length;
   const vagas = d.linhas.length - aud;
+  const audiencias = `${aud} audiência${aud === 1 ? '' : 's'}`;
+  // "Todas as salas" (D92b): o AUD4 não traz as vagas, então só conta as audiências.
+  if (todasAsSalas.value) return aud ? audiencias : 'sem audiências';
   if (!d.linhas.length) return 'sem pauta';
-  return `${aud} audiência${aud === 1 ? '' : 's'} · ${vagas} vaga${vagas === 1 ? '' : 's'} livre${vagas === 1 ? '' : 's'}`;
+  return `${audiencias} · ${vagas} vaga${vagas === 1 ? '' : 's'} livre${vagas === 1 ? '' : 's'}`;
 }
 
 function textoAviso(dia: string, d: EstadoDia): { classe: string; texto: string } | null {
@@ -240,7 +244,9 @@ const ehDestaque = (dia: string, l: LinhaPauta) =>
                   <span class="erro-texto">Erro ao ler a pauta: {{ d.erro }}</span>
                   <button class="acao secundaria pequena" type="button" @click="p.tentarDeNovo(dia)">Tentar de novo</button>
                 </div>
-                <p v-else-if="!d.linhas.length" class="vazio-dia suave">Não há audiências nem vagas configuradas para esta sala neste dia</p>
+                <p v-else-if="!d.linhas.length" class="vazio-dia suave">
+                  {{ todasAsSalas ? 'Não há audiências neste dia em nenhuma sala' : 'Não há audiências nem vagas configuradas para esta sala neste dia' }}
+                </p>
                 <template v-else>
                   <p v-if="d.erro" class="aviso-texto vazio-dia">{{ d.erro }}</p>
                   <table class="tabela-pauta">
@@ -260,7 +266,9 @@ const ehDestaque = (dia: string, l: LinhaPauta) =>
                         <td class="numero">
                           <a :href="urlProcesso(l.idProcesso)" target="_blank" rel="noopener noreferrer" title="Abrir o processo numa aba nova">{{ l.nrProcesso ?? l.idProcesso }}</a>
                         </td>
-                        <td class="partes-linha">
+                        <!-- "Todas as salas" (D92b): o AUD4 não traz partes nem segredo de justiça; no lugar, a classe. -->
+                        <td v-if="todasAsSalas" class="classe-linha">{{ l.processo?.classeSigla ?? '' }}</td>
+                        <td v-else class="partes-linha">
                           {{ partes(l) }}
                           <button
                             v-if="l.idProcesso !== undefined && !l.segredo"
@@ -339,6 +347,7 @@ const ehDestaque = (dia: string, l: LinhaPauta) =>
 .tabela-pauta .numero a { color: var(--cor-marca); text-decoration: none; font-variant-numeric: tabular-nums; }
 .tabela-pauta .numero a:hover { text-decoration: underline; }
 .tabela-pauta .tipo-linha { width: 34%; }
+.tabela-pauta .classe-linha { width: 90px; color: var(--cor-suave); }
 .linha-vaga td { background: #fff4e5; border-top: 1px dashed #f0a35b; border-bottom: 1px dashed #f0a35b; }
 .selo-vaga { font-size: 11px; font-weight: 700; color: #a35a00; }
 .selo-digital { margin-left: 6px; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 999px; background: #e8f0fe; color: #1a56c4; white-space: nowrap; }

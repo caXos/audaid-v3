@@ -103,6 +103,45 @@ export async function carregarMes(ler: LeitorPauta, idSala: number, chaveMes: st
   return codigos;
 }
 
+/** Uma audiência de "Todas as salas" (D92b): o que o AUD4 traz, sem partes, vagas nem 100% Digital. */
+export interface AudienciaDoOrgao extends EntradaPauta {
+  sala: string;
+}
+
+/**
+ * "Todas as salas" (D92b): as audiências do órgão inteiro de `inicio` a `fim`, numa consulta só
+ * (`audpje/pautas`), por dia. Forma confirmada na prova técnica de 06/11/2026: `{ numeroProcesso,
+ * idProcesso, siglaClasseJudicial, tipoAudiencia, dataAudiencia, idSala, nomeSala, … }`.
+ */
+export async function carregarAudienciasDoOrgao(ler: LeitorPauta, idOrgao: number, inicio: string, fim: string): Promise<Map<string, AudienciaDoOrgao[]>> {
+  const { r } = await lerAud4<unknown>(ler, caminhos.pautasDoOrgao(idOrgao, inicio, fim));
+  if (!r.ok) throw new Error(r.erro.mensagem);
+  const porDia = new Map<string, AudienciaDoOrgao[]>();
+  for (const a of Array.isArray(r.dados) ? r.dados : []) {
+    if (!ehObjeto(a)) continue;
+    const quando = texto(a['dataAudiencia']);
+    const dia = quando?.slice(0, 10);
+    if (!dia || !/^\d{4}-\d{2}-\d{2}$/.test(dia)) continue;
+    const idProcesso = typeof a['idProcesso'] === 'number' ? a['idProcesso'] : undefined;
+    const numero = texto(a['numeroProcesso']);
+    const tipo = texto(a['tipoAudiencia']);
+    const classe = texto(a['siglaClasseJudicial']);
+    const linha: AudienciaDoOrgao = {
+      hora: /T(\d{2}:\d{2})/.exec(quando ?? '')?.[1] ?? '--:--',
+      tipo: 'audiencia',
+      sala: texto(a['nomeSala']) ?? (typeof a['idSala'] === 'number' ? `Sala ${a['idSala']}` : '?'),
+      ...(idProcesso !== undefined ? { idProcesso } : {}),
+      ...(numero ? { nrProcesso: numero } : {}),
+      ...(tipo ? { descricaoTipo: tipo } : {}),
+      // O AUD4 não diz se o processo é 100% Digital (D92b).
+      ...(classe ? { processo: { juizoDigital: false, classeSigla: classe } } : {}),
+    };
+    porDia.set(dia, [...(porDia.get(dia) ?? []), linha]);
+  }
+  for (const linhas of porDia.values()) linhas.sort((a, b) => a.hora.localeCompare(b.hora) || a.sala.localeCompare(b.sala));
+  return porDia;
+}
+
 /** A pauta de uma sala num dia, já normalizada (vagas e audiências, pela hora). */
 export async function carregarDia(ler: LeitorPauta, idSala: number, dia: string): Promise<EntradaPauta[]> {
   const r = await ler<PautaDia>(caminhos.pautaDia(idSala, dia));
