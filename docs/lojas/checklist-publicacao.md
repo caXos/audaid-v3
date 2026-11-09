@@ -33,7 +33,7 @@ A listagem já existe (a 3.0 foi aprovada). Para uma versão nova:
 - [ ] https://addons.mozilla.org/developers/ → AudAid → **Enviar nova versão**.
 - [ ] Envie `audaid-<versão>-firefox.zip`.
 - [ ] Quando perguntar sobre código-fonte: **Sim**, envie `audaid-<versão>-fonte.zip`.
-- [ ] Notas para o revisor: o bloco em inglês de `docs/lojas/notas-revisor-amo.md`.
+- [ ] Notas para o revisor: o bloco em inglês de `docs/lojas/notas-revisor-amo.md`, em texto simples. **O campo aceita até 3000 caracteres**: ao atualizar o bloco, conte antes de enviar.
 - [ ] Se a descrição mudou (como na 3.1, com o Controle em Lote, e na 3.2, com a Pauta): atualize em **Editar página do produto**, com `docs/lojas/descricao.md`.
 - [ ] Capturas de tela: as mesmas da Chrome Web Store.
 
