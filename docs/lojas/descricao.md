@@ -2,6 +2,10 @@
 
 Use os mesmos textos nas duas lojas. Idioma da listagem: **português (Brasil)**.
 
+Na 3.2.1 entrou o parágrafo "REQUISITO", logo depois da abertura. A Chrome Web Store pede que a
+listagem diga quando a extensão exige uma conta ("Yellow Magnesium"), e antes isso só aparecia na
+última linha. Na AMO, ele entra na próxima vez em que a descrição for atualizada.
+
 ## Nome
 
 AudAid
@@ -17,6 +21,8 @@ Chrome Web Store: até 132 caracteres. AMO: "Resumo", até 250 caracteres.
 ## Descrição
 
 O AudAid é uma extensão para assistentes de audiência dos Tribunais Regionais do Trabalho que usam o PJe. Ele traz para a tela do processo o que hoje exige navegar até a pauta: designar e redesignar audiências em poucos cliques, com menos chance de erro, um processo por vez ou a pauta de um dia inteiro. E mostra a pauta das salas dos seus órgãos, dia a dia, para designar e cancelar direto nela.
+
+REQUISITO: conta no PJe de um TRT. O AudAid só aparece dentro do PJe (pje.trtN.jus.br/pjekz), depois do login; em outros sites, ele não faz nada. Ao instalar, abrem-se os termos de uso, e a extensão fica inativa até você aceitá-los. O ícone na barra do navegador abre as Opções.
 
 CONTROLE INDIVIDUAL (na tela do processo)
 • Designa e redesigna audiências sem sair da tela de Detalhes do Processo.

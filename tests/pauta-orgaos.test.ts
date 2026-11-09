@@ -70,6 +70,16 @@ describe('ordem dos órgãos (D87b)', () => {
     ]).map((x) => x.id);
     expect(ordem).toEqual([49, 174, 3]);
   });
+
+  it('os sem cidade vêm depois de todas as cidades', () => {
+    const ordem = ordenarOrgaos([
+      o(8, '01ª VARA SEM CIDADE'),
+      o(77, '01ª VARA DO TRABALHO DE FOZ DO IGUAÇU', 'FOZ DO IGUAÇU'),
+      o(7, 'ÓRGÃO SEM CIDADE'),
+      o(49, '01ª VARA DO TRABALHO DE CASCAVEL', 'CASCAVEL'),
+    ]).map((x) => x.id);
+    expect(ordem).toEqual([49, 77, 8, 7]);
+  });
 });
 
 describe('período (D91)', () => {

@@ -21,6 +21,10 @@ em `pacotes/` os três arquivos da versão. Os pacotes de outras versões que j�
 Antes de enviar, confira:
 - [ ] `npx web-ext lint --source-dir dist/firefox` sem **erros**. Os 4 avisos são esperados: 2 sobre `data_collection_permissions` e, desde a 3.1, 1 de `innerHTML` no `content.js` e 1 no `opcoes.js`, que vêm do runtime do Vue e estão explicados nas notas para o revisor da AMO;
 - [ ] carregue `dist/firefox` e `dist/chrome` uma vez e confira: termos abrem, botão aparece, Opções **sem** simulação ligada;
+- [ ] **no Chrome, carregue o zip do Chrome descompactado**, não só o `dist/chrome`, num perfil
+  separado (`chrome://extensions` → modo do desenvolvedor → "Carregar sem compactação"). **Nenhuma
+  mensagem de erro pode aparecer ao carregar.** A 3.2.0 só foi testada no Firefox e não carregava
+  no Chrome (veja "Se a Chrome Web Store recusar");
 - [ ] depois, `npm run build` para voltar o `dist/` ao build de desenvolvimento.
 
 Se a política de privacidade mudou (como na 3.1, termos v3, e na 3.2, termos v4), **mescle no `main`
@@ -44,6 +48,7 @@ A listagem já existe (a 3.0 foi publicada). Para uma versão nova:
   painel não aceita outro pacote: espere a aprovação ou cancele a revisão pendente, e aí a nova vai no
   lugar dela.
 - [ ] https://chrome.google.com/webstore/devconsole → AudAid → **Pacote** → **Fazer upload do novo pacote** → `audaid-<versão>-chrome.zip`.
+- [ ] Ainda em **Pacote**, confira se o rascunho mostra a versão nova (e não a do Firefox nem a anterior).
 - [ ] **Listagem da loja:** se a descrição mudou, cole a de `docs/lojas/descricao.md` (resumo e descrição).
 - [ ] **Imagens (só você pode fazer, no PJe):** na 3.1, acrescente capturas do Controle em Lote (a
   pauta montada e o relatório da execução), 1280×800. **Esconda nomes de partes e números de
@@ -52,7 +57,32 @@ A listagem já existe (a 3.0 foi publicada). Para uma versão nova:
 - [ ] **Práticas de privacidade:** confira com `docs/lojas/justificativas-permissoes.md`. Na 3.1, a
   finalidade única e a justificativa do `storage` mudaram; na 3.2, mudaram as três (finalidade,
   `storage` e hosts), e as informações de autenticação citam o AUD4.
+- [ ] **Instruções de teste:** usuário e senha em branco; em "Instruções adicionais", o bloco em
+  inglês de `docs/lojas/instrucoes-teste-chrome.md` (revise a frase da versão a cada envio). **O
+  campo aceita até 500 caracteres**: ao atualizar o bloco, conte antes de enviar. Sem isso, o
+  revisor não tem como ver a extensão funcionando, porque tudo exige login no PJe.
 - [ ] Enviar para revisão.
+
+### Se a Chrome Web Store recusar
+
+Aconteceu com a 3.2.0, recusada **duas vezes** em 09/11/2026 por "Yellow Magnesium" (funcionalidade
+que não funciona). A versão anterior continua publicada. **A causa era um erro de carga:** o
+`content.js` tinha um U+FFFF (não-caractere do Unicode), e o Chrome recusa a extensão inteira com
+"Não foi possível carregar o arquivo "content.js" para o script de conteúdo. Ele não possui a
+codificação UTF-8". O Firefox aceita. Corrigido na 3.2.1, e desde então o `npm run build` falha se
+o caractere voltar. O primeiro reenvio, só com as instruções de teste, não resolveu, porque o pacote
+era o mesmo.
+- [ ] Anote o ID da violação do e-mail e procure-o em
+  https://developer.chrome.com/docs/webstore/troubleshooting.
+- [ ] **Primeiro, veja se o pacote carrega** (o passo abaixo). "Yellow Magnesium" também cobre
+  pacote que não carrega, e é a causa mais fácil de confirmar.
+- [ ] Confira o zip enviado: ele precisa ser igual ao `dist/chrome` do build de release
+  (descompacte e compare com `diff -r`), com o `manifest.json` na raiz.
+- [ ] Teste **o zip exato**, num perfil separado do Chrome (para não somar com a versão da loja):
+  descompacte, `chrome://extensions` → modo do desenvolvedor → "Carregar sem compactação". Os termos
+  abrem, o ícone abre as Opções, o botão "Erros" fica vazio e, no PJe, o botão e os painéis abrem.
+- [ ] Revise a listagem, as práticas de privacidade e as instruções de teste, e envie de novo.
+- [ ] Se recusar outra vez, peça ao suporte (pelo link do e-mail) qual fluxo não funcionou.
 
 ## 4. Depois de publicar
 

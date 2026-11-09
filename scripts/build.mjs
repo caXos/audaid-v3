@@ -90,4 +90,20 @@ for (const { pasta, manifest, comPng } of navegadores) {
 }
 
 await rm(temp, { recursive: true, force: true });
+
+// O Chrome recusa carregar a extensão inteira quando um content script tem um não-caractere do
+// Unicode (U+FDD0–U+FDEF, U+FFFE, U+FFFF e os dois últimos de cada plano), com "não possui a
+// codificação UTF-8". Foi o que barrou a 3.2.0 na Chrome Web Store: um U+FFFF no fonte, que o
+// empacotador mantém como o próprio caractere. O Firefox aceita, então só o Chrome mostrava o erro.
+const NAO_CARACTERE = /[﷐-﷯]|[￾￿]|[\u{1FFFE}-\u{1FFFF}\u{2FFFE}-\u{2FFFF}\u{3FFFE}-\u{3FFFF}\u{4FFFE}-\u{4FFFF}\u{5FFFE}-\u{5FFFF}\u{6FFFE}-\u{6FFFF}\u{7FFFE}-\u{7FFFF}\u{8FFFE}-\u{8FFFF}\u{9FFFE}-\u{9FFFF}\u{AFFFE}-\u{AFFFF}\u{BFFFE}-\u{BFFFF}\u{CFFFE}-\u{CFFFF}\u{DFFFE}-\u{DFFFF}\u{EFFFE}-\u{EFFFF}\u{FFFFE}-\u{FFFFF}\u{10FFFE}-\u{10FFFF}]/u;
+for (const arquivo of ENTRADAS.map((e) => e.saida)) {
+  const texto = await readFile(join(dist, 'chrome', arquivo), 'utf8');
+  const achado = NAO_CARACTERE.exec(texto);
+  if (achado) {
+    const linha = texto.slice(0, achado.index).split('\n').length;
+    const codigo = achado[0].codePointAt(0).toString(16).toUpperCase().padStart(4, '0');
+    throw new Error(`dist/chrome/${arquivo}, linha ${linha}: U+${codigo}, que o Chrome não aceita. Troque no fonte.`);
+  }
+}
+
 console.log(`AudAid ${pacote.version} (${release ? 'release' : 'desenvolvimento'}): dist/chrome e dist/firefox prontos.`);
