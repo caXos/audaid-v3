@@ -54,7 +54,10 @@ const comparar = new Intl.Collator('pt-BR', { sensitivity: 'base', numeric: true
 export function ordenarOrgaos(orgaos: OrgaoPauta[]): OrgaoPauta[] {
   return [...orgaos].sort((a, b) => {
     if (a.logado !== b.logado) return a.logado ? -1 : 1;
-    const cidade = comparar(a.cidade ?? '￿', b.cidade ?? '￿');
+    // Os sem cidade vão para o fim. Até a 3.2.0 isso era um U+FFFF no lugar da cidade, e o Chrome
+    // recusa um content script com esse caractere ("não possui a codificação UTF-8").
+    if ((a.cidade === undefined) !== (b.cidade === undefined)) return a.cidade === undefined ? 1 : -1;
+    const cidade = comparar(a.cidade ?? '', b.cidade ?? '');
     if (cidade) return cidade;
     const na = numeroNaCidade(a.nome);
     const nb = numeroNaCidade(b.nome);
