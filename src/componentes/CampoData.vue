@@ -4,19 +4,20 @@
 // acima (Lote, D59).
 import type { Mensagem } from './mensagens';
 
-defineProps<{ mensagem: Mensagem; empilhado?: boolean }>();
+/** `desabilitado`: a data vem fixa (o "+" da Pauta, D89d). */
+defineProps<{ mensagem: Mensagem; empilhado?: boolean; desabilitado?: boolean }>();
 const data = defineModel<string>({ required: true });
 </script>
 
 <template>
   <div v-if="empilhado" class="campo campo-data">
     <label>Data</label>
-    <div class="controles"><input v-model="data" type="date" /></div>
+    <div class="controles"><input v-model="data" type="date" :disabled="desabilitado" /></div>
     <div :class="['msg', mensagem.classe]" :title="mensagem.texto">{{ mensagem.texto }}</div>
   </div>
   <template v-else>
     <label>Data</label>
-    <div class="controles"><input v-model="data" type="date" /></div>
+    <div class="controles"><input v-model="data" type="date" :disabled="desabilitado" /></div>
     <span></span>
     <div :class="['msg', mensagem.classe]" :title="mensagem.texto">{{ mensagem.texto }}</div>
   </template>

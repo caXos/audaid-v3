@@ -29,6 +29,8 @@ export interface EntradaPauta {
   /** Vaga = horário pré-configurado na sala, sem processo. Conta como livre (D33). */
   tipo: 'audiencia' | 'vaga';
   idProcesso?: number;
+  /** O id da audiência (`pautaAudienciaHorario.id`): o cancelamento usa este (D89e). A vaga não tem. */
+  idAudiencia?: number;
   nrProcesso?: string;
   descricaoTipo?: string;
   idTipo?: number;
@@ -68,6 +70,7 @@ export function lerPauta(pauta: Partial<PautaDia> | null | undefined): EntradaPa
         descricaoTipo: p.tipo?.descricao,
       };
       if (typeof p.tipo?.id === 'number') e.idTipo = p.tipo.id;
+      if (e.tipo === 'audiencia' && typeof p.pautaAudienciaHorario?.id === 'number') e.idAudiencia = p.pautaAudienciaHorario.id;
       const ativo = lerPolo(p.poloAtivo);
       const passivo = lerPolo(p.poloPassivo);
       if (ativo) e.poloAtivo = ativo;

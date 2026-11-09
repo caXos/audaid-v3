@@ -4,7 +4,8 @@ import { nextTick, ref, watch } from 'vue';
 import PassoExecucao from '../componentes/PassoExecucao.vue';
 import { TEXTO_ACAO, type Envio } from './envio';
 
-const props = defineProps<{ envio: Envio; origem: string }>();
+/** `semRecarregar`: na Pauta, que relê o dia sozinha, não há "Recarregar a página?" (D89d). */
+const props = defineProps<{ envio: Envio; origem: string; semRecarregar?: boolean }>();
 
 const botaoGravar = ref<HTMLButtonElement | null>(null);
 watch(
@@ -62,7 +63,7 @@ function recarregar() {
             <li v-for="a in envio.estado.tela.resultado.acoes" :key="a">{{ TEXTO_ACAO[a] }}</li>
           </ul>
           <!-- §2.2, passo 6: a tela do PJe só mostra a audiência nova depois de recarregar. -->
-          <div v-if="envio.estado.tela.gravouDeVerdade && !envio.estado.recarregarDispensado" class="recarregar">
+          <div v-if="envio.estado.tela.gravouDeVerdade && !envio.estado.recarregarDispensado && !semRecarregar" class="recarregar">
             Recarregar a página para ver a audiência no PJe?
             <div class="linha-form">
               <button class="acao" type="button" @click="recarregar">Recarregar agora</button>

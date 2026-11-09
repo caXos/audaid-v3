@@ -180,7 +180,12 @@ describe('Controle em Lote, tela 2 (entrega 2)', () => {
     expect(p.linhas().map((l) => l.querySelector('.numero')!.textContent)).toEqual([N1, N3]);
     // D61: autor numa linha, réu na outra; a primeira parte e "(+X)" com as demais no hover.
     const partesDe = (l: HTMLElement) => [...l.querySelectorAll('.linha-parte')].map((x) => x.textContent!.trim());
-    expect(partesDe(p.linhas()[0]!)).toEqual(['ANA EXEMPLO(+1)(?)', 'EMPRESA MODELO LTDA(+1)(?)']);
+    expect(partesDe(p.linhas()[0]!)).toEqual(['ANA EXEMPLO(+1)', 'EMPRESA MODELO LTDA(+1)']);
+    // D100: os advogados ficam no ícone de pessoa, com a lista no tooltip.
+    const advogados = p.linhas()[0]!.querySelector('.linha-parte .ajuda-advogados')!;
+    expect(advogados.querySelector('svg[data-icone="pessoa"]')).not.toBeNull();
+    expect(advogados.getAttribute('title')).toBeTruthy();
+    expect(advogados.getAttribute('aria-label')).toBe(advogados.getAttribute('title'));
     const mais = p.linhas()[0]!.querySelector('.linha-parte .ajuda')!;
     expect(mais.getAttribute('title')).toBe('BRUNA FICTICIA');
     expect(p.linhas()[1]!.textContent).toContain('tem audiência');

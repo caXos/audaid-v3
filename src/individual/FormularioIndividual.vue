@@ -9,14 +9,31 @@ import DialogoPauta from '../componentes/DialogoPauta.vue';
 import GradeCampos from '../componentes/GradeCampos.vue';
 import TipoComposto from '../componentes/TipoComposto.vue';
 import type { Opcoes } from '../config/opcoes';
+import type { ResultadoExecucao } from '../fluxo/executor';
 import type { Ambiente } from '../pje/ambiente';
 import type { Dados } from './dados';
-import { useFormulario } from './formulario';
+import { useFormulario, type FixosFormulario } from './formulario';
 import ResultadoIndividual from './ResultadoIndividual.vue';
 
-const props = defineProps<{ ambiente: Ambiente; dados: Dados; opcoes: Opcoes; simulando: boolean }>();
+const props = defineProps<{
+  ambiente: Ambiente;
+  dados: Dados;
+  opcoes: Opcoes;
+  simulando: boolean;
+  /** O "+" da Pauta (D89d): sala, dia e, pela vaga, hora fixos. */
+  fixos?: FixosFormulario;
+  /** Na Pauta: sem o "Recarregar a página?" (a Pauta relê o dia sozinha). */
+  semRecarregar?: boolean;
+  aoConcluir?: (resultado: ResultadoExecucao, gravou: boolean) => void;
+  /** Na Pauta (D99): depois de executar, o botão da ação fica desabilitado. */
+  umaVez?: boolean;
+}>();
 
-const f = useFormulario(props.ambiente, props.dados, props.opcoes, props.simulando);
+const f = useFormulario(props.ambiente, props.dados, props.opcoes, props.simulando, {
+  ...(props.fixos ? { fixos: props.fixos } : {}),
+  ...(props.aoConcluir ? { aoConcluir: props.aoConcluir } : {}),
+  ...(props.umaVez ? { umaVez: true } : {}),
+});
 const dialogoPauta = ref<{ abrir(): void } | null>(null);
 </script>
 
@@ -25,15 +42,15 @@ const dialogoPauta = ref<{ abrir(): void } | null>(null);
     <div class="cartao-topo"><h2>{{ f.redesignacao ? 'Redesignar audiência' : 'Designar audiência' }}</h2></div>
     <div class="cartao-corpo">
       <GradeCampos>
-        <CampoSala v-model="f.salaId" :salas="f.salas" />
-        <CampoData v-model="f.data" :mensagem="f.avaliacaoData.msg" />
+        <CampoSala v-model="f.salaId" :salas="f.salas" :desabilitado="f.salaFixa" />
+        <CampoData v-model="f.data" :mensagem="f.avaliacaoData.msg" :desabilitado="f.dataFixa" />
         <!-- Caminho principal: escolher o horário clicando numa vaga da pauta (digitar é a alternativa). -->
         <label>Horário</label>
         <div class="controles">
-          <button class="acao secundaria" type="button" :disabled="!f.entradas" @click="dialogoPauta?.abrir()">Escolher horário na pauta do dia</button>
+          <button class="acao secundaria" type="button" :disabled="!f.entradas || f.horaFixa" @click="dialogoPauta?.abrir()">Escolher horário na pauta do dia</button>
         </div>
         <span></span>
-        <div class="controles"><span class="suave">ou digite:</span><input v-model="f.hora" type="time" /></div>
+        <div class="controles"><span class="suave">ou digite:</span><input v-model="f.hora" type="time" :disabled="f.horaFixa" /></div>
         <span></span>
         <div :class="['msg', f.avaliacaoHora.msg.classe]" :title="f.avaliacaoHora.msg.texto">{{ f.avaliacaoHora.msg.texto }}</div>
         <DialogoPauta
@@ -54,10 +71,12 @@ const dialogoPauta = ref<{ abrir(): void } | null>(null);
         <ul class="pendencias">
           <li v-for="p in f.pendencias" :key="p">{{ p }}</li>
         </ul>
+        <!-- O fim da linha da ação: o "Fechar" do "+" da Pauta (D99). -->
+        <slot name="fim" />
       </div>
     </div>
   </section>
-  <ResultadoIndividual :envio="f.envio" :origem="ambiente.origem" />
+  <ResultadoIndividual :envio="f.envio" :origem="ambiente.origem" :sem-recarregar="semRecarregar" />
 </template>
 
 <style>

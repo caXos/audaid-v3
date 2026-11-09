@@ -4,6 +4,7 @@
 // Pelas vagas (D73), o início é "Levar para a vaga", e a vaga ocupada pode ser deixada livre. Os
 // conflitos com a pauta da sala aparecem na linha, com as ações da tela 3 (D78).
 import { reactive, ref } from 'vue';
+import Icone from '../componentes/Icone.vue';
 import { formatarDataHora } from '../ui/dom';
 import { TIPOS_BASE } from '../regras/tipoComposto';
 import { dicaAdvogados, resumoGigs, resumoPolo } from './apresentacao';
@@ -118,12 +119,13 @@ const classeConflito = () => {
           >tem audiência</span
         >
       </div>
-      <!-- D61: autor numa linha, réu na outra; só a primeira parte, com "(+X)" e "(?)" sempre visíveis. -->
+      <!-- D61: autor numa linha, réu na outra; só a primeira parte, com "(+X)" e os advogados sempre visíveis.
+           D100: os advogados ficam no ícone de pessoa, como na Pauta. -->
       <template v-if="vista.processo">
         <div v-for="polo in [vista.processo.partes.autores, vista.processo.partes.reus]" :key="polo === vista.processo.partes.autores ? 'autores' : 'reus'" class="linha-parte">
           <span class="nome-parte" :title="resumoPolo(polo).nome">{{ resumoPolo(polo).nome }}</span>
           <span v-if="resumoPolo(polo).mais" class="ajuda" :title="resumoPolo(polo).outros">(+{{ resumoPolo(polo).mais }})</span>
-          <span v-if="polo.length" class="ajuda" :title="dicaAdvogados(polo)">(?)</span>
+          <span v-if="polo.length" class="ajuda ajuda-advogados" role="img" :title="dicaAdvogados(polo)" :aria-label="dicaAdvogados(polo)"><Icone nome="pessoa" /></span>
         </div>
       </template>
     </div>

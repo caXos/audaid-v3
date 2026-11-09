@@ -31,3 +31,35 @@ export function extrairNumeros(texto: string): string[] {
   // D12: duplicados saem em silêncio.
   return [...new Set(achados.map((a) => a.numero))];
 }
+
+/** Onde cada separador entra: depois de 7, 9, 13, 14 e 16 dígitos. */
+const GRUPOS: [number, number, string][] = [
+  [0, 7, ''],
+  [7, 9, '-'],
+  [9, 13, '.'],
+  [13, 14, '.'],
+  [14, 16, '.'],
+  [16, 20, '.'],
+];
+
+/**
+ * A máscara do número enquanto se digita (D99), no formato 0000000-00.0000.0.00.0000:
+ * - o hífen digitado completa o sequencial com zeros à esquerda, como a busca do PJe faz
+ *   ("369-" → "0000369-"; "55-53" → "0000055-53");
+ * - os separadores seguintes entram sozinhos quando chega o dígito depois deles;
+ * - número inteiro colado (formatado, com os 20 dígitos ou no meio de um texto) vira o número
+ *   formatado.
+ */
+export function mascararNumero(texto: string): string {
+  const inteiro = extrairNumeros(texto)[0];
+  if (inteiro) return inteiro;
+  const hifen = texto.indexOf('-');
+  const antes = hifen >= 0 ? texto.slice(0, hifen).replace(/\D/g, '') : '';
+  // O hífen só vale depois de algum dígito; o sequencial tem 7: menos, zeros à esquerda (mais, nada se perde).
+  const comHifen = hifen >= 0 && antes.length > 0;
+  const digitos = (comHifen ? antes.padStart(7, '0') + texto.slice(hifen + 1).replace(/\D/g, '') : texto.replace(/\D/g, '')).slice(0, 20);
+  let saida = '';
+  for (const [de, ate, separador] of GRUPOS) if (digitos.length > de) saida += separador + digitos.slice(de, ate);
+  // "369-": o hífen digitado fica, para a pessoa seguir com o dígito verificador.
+  return comHifen && digitos.length === 7 ? `${saida}-` : saida;
+}

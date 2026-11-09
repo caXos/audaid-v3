@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
-// A Pauta (3.2, entrega 1), só leitura, com um PJe falso e um IntersectionObserver falso (o teste
-// diz quais dias estão perto da tela). Números de processo e nomes fictícios.
+// A Pauta (3.2) com um PJe falso e um IntersectionObserver falso (o teste diz quais dias estão
+// perto da tela): a leitura (entrega 1, D95) e o "+" e o "×" (entrega 2, D98). Números de processo e
+// nomes fictícios.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { nextTick } from 'vue';
@@ -9,6 +10,7 @@ import type { Armazenamento } from '../src/ext/api';
 import { ControlePauta } from '../src/pauta/ControlePauta';
 import { leitorDoPje, type FocoPauta } from '../src/pauta/estadoPauta';
 import { lerAmbiente } from '../src/pje/ambiente';
+import { DESCRICOES_CONHECIDAS } from '../src/regras/tipos';
 import partes from './fixtures/partes-ficticias.json';
 
 const ambiente = lerAmbiente('https://pje.trt9.jus.br/pjekz/painel/global/todos/lista-processos')!;
@@ -57,15 +59,17 @@ const audiencia = (idProcesso: number, hora: string, tipo: string, orgao: number
 });
 const vaga = (hora: string) => ({ pautaAudienciaHorario: { horaInicial: `${hora}:00`, horaFinal: `${hora}:00` }, tipo: { id: 3, descricao: 'Conciliação' } });
 
-/** A pauta de cada sala em cada dia; o que não estiver aqui é dia sem nada. */
-const PAUTA: Record<string, object[]> = {
+/** A pauta de cada sala em cada dia; o que não estiver aqui é dia sem nada. Refeita a cada teste (o "×" real a muda). */
+const pautaInicial = (): Record<string, object[]> => ({
   [`503|${D1}`]: [audiencia(11, '09:00', 'Conciliação em Conhecimento por videoconferência', 174, true), vaga('09:10')],
   [`504|${D1}`]: [audiencia(12, '08:30', 'Conciliação em Conhecimento', 174)],
-  [`503|${D2}`]: [audiencia(13, '14:00', 'Instrução', 174)],
+  // O 14 tem audiência no CEJUSC, mas tramita na 1ª VT: não dá para cancelar (D27).
+  [`503|${D2}`]: [audiencia(13, '14:00', 'Instrução', 174), audiencia(14, '15:00', 'Instrução', 49)],
   [`162|${D1}`]: [audiencia(21, '10:00', 'Inicial', 49)],
   // Um sábado com audiência (D90: o fim de semana com algo aparece).
   ['503|2026-11-14']: [audiencia(15, '09:00', 'Conciliação', 174)],
-};
+});
+let PAUTA = pautaInicial();
 
 /**
  * O mês da sala como o PJe respondeu na prova técnica de 06/11/2026: um item por dia, `{ dia, tipo }`.
@@ -83,29 +87,33 @@ function mesDaSala(idSala: string, ano: number, mes: number) {
   });
 }
 
-/** O `audpje/pautas` (D92b), na forma da prova técnica de 06/11/2026: sem partes, vagas nem 100% Digital. */
-const aud4 = (idProcesso: number, quando: string, idSala: number, nomeSala: string, classe: string) => ({
-  numeroProcesso: `00001${idProcesso}-52.2026.5.09.0001`,
-  idProcessoAudiencia: 8000 + idProcesso,
-  idProcesso,
-  classeJudicial: classe === 'ATOrd' ? 'Ação Trabalhista - Rito Ordinário' : 'Ação Trabalhista - Rito Sumaríssimo',
-  siglaClasseJudicial: classe,
-  idOrgaoJulgador: 174,
-  vara: 3603,
-  idTipoAudiencia: 3,
-  tipoAudiencia: 'Conciliação em Conhecimento',
-  dataAudiencia: quando,
-  anoProcesso: 2026,
-  valorCausa: 1000,
-  idSala,
-  nomeSala,
+// O "+" (D89d). Números fictícios com o dígito verificador certo: o 101 não tem audiência, o 102 já
+// tem uma no órgão (vira redesignação, D32) e o 109 tramita na 1ª VT (D27).
+const N101 = '0000101-52.2026.5.09.0001';
+const N102 = '0000102-37.2026.5.09.0001';
+const N109 = '0000109-13.2026.5.09.0071';
+const NUMEROS: Record<string, number> = { [N101]: 101, [N102]: 102, [N109]: 109 };
+const processoFalso = (id: number, numero: string, orgao: { id: number; descricao: string }) => ({
+  id,
+  numero,
+  classeJudicial: { sigla: 'ATOrd' },
+  orgaoJulgador: orgao,
+  juizoDigital: false,
+  faseProcessual: 'CONHECIMENTO',
 });
-const AUD4 = [
-  aud4(11, `${D1}T09:00:00`, 503, 'Sala 01 Cejusc-CSC', 'ATSum'),
-  aud4(12, `${D1}T08:30:00`, 504, 'Sala 02 Cejusc-CSC', 'ATOrd'),
-  aud4(13, `${D2}T14:00:00`, 503, 'Sala 01 Cejusc-CSC', 'ATOrd'),
-  aud4(16, '2026-11-15T10:00:00', 504, 'Sala 02 Cejusc-CSC', 'ATOrd'),
-];
+const CEJUSC = { id: 174, descricao: 'CEJUSC - JT - CASCAVEL' };
+const PROCESSOS: Record<number, object> = {
+  101: processoFalso(101, N101, CEJUSC),
+  102: processoFalso(102, N102, CEJUSC),
+  109: processoFalso(109, N109, { id: 49, descricao: '01ª VARA DO TRABALHO DE CASCAVEL' }),
+};
+const AUDIENCIA_DO_102 = {
+  id: 7020,
+  dataInicio: '2026-11-20T10:00:00',
+  status: 'Designada',
+  tipo: { id: 6, descricao: 'Instrução' },
+  salaFisica: { id: 504, nome: 'Sala 02 Cejusc-CSC', orgaoJulgador: CEJUSC },
+};
 
 let perfisFalham = false;
 let mesFalha = false;
@@ -127,12 +135,6 @@ async function responder(url: string, init?: RequestInit): Promise<Response> {
       return json([174, 77, 49, 63, 50, 174].map((id) => ({ idOrgaoJulgador: id })));
     }
     if (u.pathname.endsWith('/audpje/oj')) return json(TRIBUNAL);
-    if (u.pathname.endsWith('/audpje/pautas')) {
-      const de = u.searchParams.get('dataInicio') ?? '';
-      const ate = u.searchParams.get('dataFim') ?? '';
-      const oj = Number(u.searchParams.get('orgaoJulgador'));
-      return json(AUD4.filter((a) => a.idOrgaoJulgador === oj && a.dataAudiencia.slice(0, 10) >= de && a.dataAudiencia.slice(0, 10) <= ate));
-    }
     if (u.pathname.endsWith('/salasaudiencias')) return json(SALAS[Number(u.searchParams.get('idOrgaoJulgador'))] ?? []);
     if (u.pathname.endsWith('/calendarioeventos')) {
       return json([{ id: 1, descricao: 'Feriado municipal', dataInicio: D3, dataFim: D3, feriado: true, suspendeAudiencia: true }]);
@@ -148,6 +150,35 @@ async function responder(url: string, init?: RequestInit): Promise<Response> {
       return json(itens ? { dia, pautasDoDia: itens } : { dia });
     }
     if (/\/processos\/id\/\d+\/partes$/.test(u.pathname)) return json(partes);
+    // D99: as sugestões do número (a busca do painel), na forma confirmada em 09/11/2026; o 101 vem
+    // em dois agrupamentos.
+    if (u.pathname.endsWith('/agrupamentotarefas/processos')) {
+      const prefixo = u.searchParams.get('numero') ?? '';
+      // D101: o "0000500-" faz a consulta dar erro.
+      if (prefixo.startsWith('0000500')) return new Response('', { status: 500 });
+      const achados = Object.entries(NUMEROS).filter(([n]) => n.startsWith(prefixo));
+      return json(achados.flatMap(([n, id]) => [8, ...(id === 101 ? [9] : [])].map((g) => ({ idAgrupamentoProcesso: g, idProcesso: id, numeroProcessoCompleto: n }))));
+    }
+    // O "+" (D89d): a busca por número, o processo, as audiências dele e os tipos.
+    if (u.pathname.endsWith('/processos') && u.searchParams.has('numero')) {
+      const id = NUMEROS[u.searchParams.get('numero') ?? ''];
+      return id ? json(id) : new Response('', { status: 200 });
+    }
+    const audiencias = /\/processos\/id\/(\d+)\/audiencias$/.exec(u.pathname);
+    if (audiencias) return json(audiencias[1] === '102' ? [AUDIENCIA_DO_102] : []);
+    if (u.pathname.endsWith('/dominio/tiposaudiencias')) return json(DESCRICOES_CONHECIDAS.map((descricao, i) => ({ id: i + 1, descricao })));
+    // O prazo do GIGS (leitura, também na simulação).
+    if (u.pathname.includes('/atividade/retorna-prazo/')) return json({ DATA: '2026-11-10T00:00:00' });
+    const processo = /\/processos\/id\/(\d+)$/.exec(u.pathname);
+    if (processo && PROCESSOS[Number(processo[1])]) return json(PROCESSOS[Number(processo[1])]);
+    // D94: o processo 12 está em segredo de justiça; o 11 é 100% Digital.
+    if (processo) return json({ id: Number(processo[1]), segredoDeJustica: processo[1] === '12', juizoDigital: processo[1] === '11' });
+    // O "×" real (D89e): o PJe tira a audiência da pauta.
+    if (u.pathname.endsWith('/audiencias/cancelamento') && init?.method === 'PATCH') {
+      const [id] = JSON.parse(String(init.body)) as number[];
+      for (const chave of Object.keys(PAUTA)) PAUTA[chave] = PAUTA[chave]!.filter((x) => (x as { pautaAudienciaHorario?: { id?: number } }).pautaAudienciaHorario?.id !== id);
+      return json({ pautasProcessadas: [{ id, status: 'Designada', designada: false }] });
+    }
     return new Response('não encontrado', { status: 404 });
   } finally {
     ativas--;
@@ -182,6 +213,7 @@ function memoria(): Armazenamento & { dados: Map<string, unknown> } {
 }
 
 beforeEach(() => {
+  PAUTA = pautaInicial();
   perfisFalham = false;
   mesFalha = false;
   lidos.length = 0;
@@ -198,13 +230,15 @@ beforeEach(() => {
 
 afterEach(() => vi.unstubAllGlobals());
 
-async function abrir(o: { armazenamento?: Armazenamento; foco?: FocoPauta; ocultos?: number[]; meses?: number } = {}) {
+async function abrir(o: { armazenamento?: Armazenamento; foco?: FocoPauta; ocultos?: number[]; meses?: number; real?: boolean } = {}) {
   const conhecidos: OrgaoConhecido[][] = [];
   const pauta = new ControlePauta(ambiente, '3.2.0', o.armazenamento ?? memoria(), (lista) => conhecidos.push(lista), {
     ler: leitorDoPje(ambiente),
     hoje: HOJE,
   });
   const opcoes = opcoesPadrao(true);
+  // Na versão de desenvolvimento, a simulação vem ligada (D39); `real` a desliga.
+  if (o.real) opcoes.simulacao = false;
   opcoes.pauta.ocultos = o.ocultos ?? [];
   if (o.meses) opcoes.pauta.mesesAFrente = o.meses;
   pauta.abrir(opcoes, o.foco);
@@ -301,37 +335,23 @@ describe('Pauta (3.2, entrega 1)', () => {
     expect(leiturasDoDia().some((l) => l.includes('idSalaAudiencia=162'))).toBe(true);
   });
 
-  it('"Todas as salas" (D92b): o órgão inteiro pelo AUD4, um mês por consulta, sem partes nem vagas', async () => {
+  it('"Todas as salas" (D95): a pauta de cada sala, junta pela hora, com vagas, partes e a sala em cada linha', async () => {
     const { raiz, mostrar, escolher, dia, opcoesDe } = await abrir();
-    const detalhes = async () => {
-      const campo = raiz.querySelector<HTMLInputElement>('#pauta-sala')!;
-      campo.dispatchEvent(new Event('focus'));
-      await nextTick();
-      const d = [...raiz.querySelectorAll('#pauta-sala-lista .detalhe-opcao')].map((x) => x.textContent);
-      campo.dispatchEvent(new Event('blur'));
-      return d;
-    };
     expect(await opcoesDe('pauta-sala')).toEqual(['Sala 01 Cejusc-CSC', 'Sala 02 Cejusc-CSC', 'Todas as salas']);
-    expect(await detalhes()).toEqual(['visão geral, sem partes nem vagas']);
-    await mostrar([D1, D2]);
-    await vi.waitFor(() => expect(leiturasDoDia()).toHaveLength(2));
+    await mostrar([D1, '2026-11-12']);
     await escolher('pauta-sala', 'todas');
-    await vi.waitFor(() => expect(dia(D1).textContent).toContain('2 audiências'));
-    expect(dia(D1).textContent).not.toContain('vaga');
+    await vi.waitFor(() => expect(dia(D1).textContent).toContain('2 audiências · 1 vaga livre'));
     const linhas = [...dia(D1).querySelectorAll('tr')].map((tr) => tr.textContent ?? '');
-    expect(linhas).toHaveLength(2);
-    expect(linhas[0]).toMatch(/08:30.*Sala 02 Cejusc-CSC.*0000112-52.*ATOrd.*Conciliação em Conhecimento/);
-    expect(linhas[1]).toMatch(/09:00.*Sala 01 Cejusc-CSC.*0000111-52.*ATSum/);
-    // Sem partes e sem "(?)": o AUD4 não diz se o processo é segredo de justiça.
-    expect(dia(D1).querySelector('.botao-ajuda')).toBeNull();
-    expect(dia(D1).textContent).not.toContain('AUTOR');
-    // Uma consulta para o mês inteiro, de hoje ao fim do mês, e nenhuma pauta do dia a mais.
-    expect(lidos.filter((l) => l.includes('/audpje/pautas')).at(-1)).toBe('/audapi/rest/pje/audpje/pautas?dataInicio=2026-11-09&dataFim=2026-11-30&orgaoJulgador=174');
-    expect(leiturasDoDia()).toHaveLength(2);
-    // O domingo com audiência aparece; o dia sem nada diz que não há audiência em nenhuma sala.
-    await vi.waitFor(() => expect(raiz.querySelector('[data-dia="2026-11-15"]')).not.toBeNull());
-    await mostrar(['2026-11-12']);
-    await vi.waitFor(() => expect(dia('2026-11-12').textContent).toContain('Não há audiências neste dia em nenhuma sala'));
+    expect(linhas).toHaveLength(3);
+    expect(linhas[0]).toMatch(/08:30.*Sala 02 Cejusc-CSC.*AUTOR 12/);
+    expect(linhas[1]).toMatch(/09:00.*Sala 01 Cejusc-CSC.*AUTOR 11.*100% Digital/);
+    expect(linhas[2]).toMatch(/09:10.*Sala 01 Cejusc-CSC.*Vaga livre/);
+    // D96, D97: o "(?)" dos advogados, como na sala; sem "Carregar partes" e sem o AUD4.
+    expect(dia(D1).querySelector('.botao-ajuda')).not.toBeNull();
+    expect(raiz.textContent).not.toContain('Carregar partes');
+    expect(lidos.some((l) => l.includes('/audpje/pautas'))).toBe(false);
+    expect(leiturasDoDia().filter((l) => l.endsWith(D1)).map((l) => /idSalaAudiencia=(\d+)/.exec(l)![1]).sort()).toEqual(['503', '504']);
+    await vi.waitFor(() => expect(dia('2026-11-12').textContent).toContain('Não há audiências nem vagas configuradas em nenhuma sala neste dia'));
   });
 
   it('os advogados só são lidos quando pedidos, no "(?)" (D61, D92)', async () => {
@@ -438,6 +458,17 @@ describe('a janela da Pauta', () => {
     expect(css).toMatch(/\.pauta-janela\s*\{[^}]*position:\s*absolute/);
     expect(raiz.textContent).not.toContain('AudAid · Pauta · diagnóstico');
   });
+
+  // O mesmo para os diálogos: o CSS comum ao "+" e ao "×" estava no do "+"; abrir o "×" antes ficava sem ele.
+  it('o CSS comum aos diálogos do "+" e do "×" entra sem abrir nenhum deles', async () => {
+    const { raiz } = await abrir();
+    const css = [...raiz.querySelectorAll('style')].map((s) => s.textContent ?? '').join('\n');
+    expect(css).toMatch(/\.fundo-acao\s*\{/);
+    expect(css).toMatch(/\.janela-acao\s*\{/);
+    expect(css).toMatch(/\.faixa-real-acao\s*\{/);
+    expect(css).toMatch(/\.botao-fechar-acao\s*\{[^}]*margin-left:\s*auto/);
+    expect(raiz.querySelector('.janela-acao')).toBeNull();
+  });
 });
 
 describe('o mês da sala (D92, prova técnica de 06/11/2026)', () => {
@@ -478,5 +509,289 @@ describe('o mês da sala (D92, prova técnica de 06/11/2026)', () => {
     await vi.waitFor(() => expect(dia('2026-11-12').textContent).toContain('Não há audiências nem vagas configuradas'));
     expect(leiturasDoDia().some((l) => l.endsWith('2026-11-12'))).toBe(true);
     expect(raiz.querySelector('[data-dia="2026-11-14"]')).toBeNull();
+  });
+});
+
+describe('o "+" e o "×" no órgão logado (entrega 2, D89b–D89e)', () => {
+  // O formulário do Individual olha a data de hoje: fixa em 06/11/2026, antes dos dias da pauta.
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-06T10:00:00'));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const botoes = (el: ParentNode, texto: RegExp) => [...el.querySelectorAll<HTMLButtonElement>('button')].filter((b) => texto.test(b.textContent?.trim() ?? ''));
+  const janela = (raiz: ShadowRoot) => [...raiz.querySelectorAll<HTMLElement>('.janela-acao')].at(-1)!;
+  const mudar = async (el: HTMLSelectElement | HTMLInputElement, valor: string) => {
+    el.value = valor;
+    el.dispatchEvent(new Event('input'));
+    el.dispatchEvent(new Event('change'));
+    await nextTick();
+  };
+  async function buscarProcesso(raiz: ShadowRoot, numero: string) {
+    await mudar(janela(raiz).querySelector<HTMLInputElement>('#designar-numero')!, numero);
+    janela(raiz).querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }));
+  }
+  const tipoBase = (j: HTMLElement) => [...j.querySelectorAll('select')].find((s) => s.querySelector('option')?.textContent?.includes('escolha o tipo'))!;
+  const escritas = () => vi.mocked(fetch).mock.calls.filter(([, init]) => (init as RequestInit).method !== 'GET');
+
+  async function abrirComVaga(o: { real?: boolean } = {}) {
+    const t = await abrir(o);
+    await t.mostrar([D1]);
+    await vi.waitFor(() => expect(t.dia(D1).querySelector('.botao-mais')).not.toBeNull());
+    return t;
+  }
+
+  it('"+" da vaga: sala, dia e hora fixos; designa (simulação) pelo formulário do Individual', async () => {
+    const { raiz, dia } = await abrirComVaga();
+    dia(D1).querySelector<HTMLButtonElement>('.botao-mais')!.click();
+    await nextTick();
+    expect(janela(raiz).textContent).toContain('Designar · seg, 09/11 · Sala 01 Cejusc-CSC · 09:10');
+    expect(janela(raiz).textContent).toContain('SIMULAÇÃO');
+    await buscarProcesso(raiz, N101);
+    await vi.waitFor(() => expect(janela(raiz).textContent).toContain('Designar audiência'));
+    const j = janela(raiz);
+    const sala = j.querySelector<HTMLSelectElement>('.grade select')!;
+    const data = j.querySelector<HTMLInputElement>('input[type="date"]')!;
+    const hora = j.querySelector<HTMLInputElement>('input[type="time"]')!;
+    expect([sala.value, sala.disabled, data.value, data.disabled, hora.value, hora.disabled]).toEqual(['503', true, D1, true, '09:10', true]);
+    await mudar(tipoBase(j), 'Conciliação');
+    const enviar = botoes(j, /^Simular designação$/)[0]!;
+    await vi.waitFor(() => expect(enviar.disabled).toBe(false));
+    // D99: o "Fechar" na linha da ação, por último (à direita).
+    const rodape = j.querySelector('.rodape-form')!;
+    expect(rodape.lastElementChild?.textContent?.trim()).toBe('Fechar');
+    enviar.click();
+    await vi.waitFor(() => expect(j.textContent).toContain('Simulação concluída'));
+    expect(j.textContent).toMatch(/"horarioInicial": "09:10"/);
+    expect(j.textContent).not.toContain('Recarregar a página');
+    expect(escritas()).toEqual([]);
+    // D99: executado uma vez, o botão da ação fica desabilitado, e o "Fechar" continua ali.
+    expect(enviar.disabled).toBe(true);
+    expect(rodape.textContent).toContain('Já executado. Para outra, feche e abra de novo.');
+    expect(rodape.lastElementChild?.textContent?.trim()).toBe('Fechar');
+    (rodape.lastElementChild as HTMLButtonElement).click();
+    await nextTick();
+    expect(raiz.querySelector('.janela-acao')).toBeNull();
+  });
+
+  it('D99: o campo do número abre com o foco, mascara e sugere pelo PJe; escolher a sugestão já busca', async () => {
+    const { raiz, dia } = await abrirComVaga();
+    dia(D1).querySelector<HTMLButtonElement>('.botao-mais')!.click();
+    await nextTick();
+    const campo = janela(raiz).querySelector<HTMLInputElement>('#designar-numero')!;
+    expect(raiz.activeElement).toBe(campo);
+    await mudar(campo, '101-');
+    expect(campo.value).toBe('0000101-');
+    // O 101 vem em dois agrupamentos e aparece uma vez só.
+    await vi.waitFor(() => expect(janela(raiz).querySelectorAll('.lista-sugestoes li')).toHaveLength(1));
+    expect(lidos).toContain('/pje-comum-api/api/agrupamentotarefas/processos?numero=0000101-');
+    expect(janela(raiz).querySelector('.lista-sugestoes li')!.textContent?.trim()).toBe(N101);
+    // Regressão do teste de 09/11/2026: o recuo das listas do cartão (`.cartao-corpo ul`) empurrava a sugestão.
+    const lista = janela(raiz).querySelector<HTMLElement>('.lista-sugestoes')!;
+    expect(getComputedStyle(lista).paddingLeft).toBe('0px');
+    campo.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', cancelable: true }));
+    await vi.waitFor(() => expect(janela(raiz).textContent).toContain('Designar audiência'));
+    expect(campo.value).toBe(N101);
+    expect(janela(raiz).querySelector('.lista-sugestoes')).toBeNull();
+  });
+
+  it('D101: sem sugestão, a mesma lista diz por quê: nenhum processo, ou erro na consulta; o aviso não se escolhe', async () => {
+    const { raiz, dia } = await abrirComVaga();
+    dia(D1).querySelector<HTMLButtonElement>('.botao-mais')!.click();
+    await nextTick();
+    const campo = janela(raiz).querySelector<HTMLInputElement>('#designar-numero')!;
+    const avisoDaLista = () => janela(raiz).querySelector<HTMLElement>('.lista-sugestoes .aviso-sugestao');
+    await mudar(campo, '999-');
+    await vi.waitFor(() => expect(avisoDaLista()?.textContent?.trim()).toBe('Não foi encontrado nenhum processo com esse número'));
+    expect(avisoDaLista()!.classList.contains('erro')).toBe(false);
+    expect(avisoDaLista()!.getAttribute('aria-disabled')).toBe('true');
+    expect(campo.hasAttribute('aria-activedescendant')).toBe(false);
+    // Enter com o aviso não escolhe nada: segue para a busca, como sem lista.
+    const enter = new KeyboardEvent('keydown', { key: 'Enter', cancelable: true });
+    campo.dispatchEvent(enter);
+    expect(enter.defaultPrevented).toBe(false);
+    // Digitar de novo tira o aviso até a próxima resposta.
+    await mudar(campo, '500-');
+    expect(avisoDaLista()).toBeNull();
+    await vi.waitFor(() => expect(avisoDaLista()?.textContent?.trim()).toBe('Erro na consulta do número do processo'));
+    expect(avisoDaLista()!.classList.contains('erro')).toBe(true);
+    // Esc fecha.
+    campo.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', cancelable: true }));
+    await nextTick();
+    expect(janela(raiz).querySelector('.lista-sugestoes')).toBeNull();
+  });
+
+  it('D99: o "+ Designar" do dia também abre com o foco no número; colar o número inteiro não pede sugestão', async () => {
+    const { raiz, dia } = await abrirComVaga();
+    botoes(dia(D1), /^\+ Designar$/)[0]!.click();
+    await nextTick();
+    const campo = janela(raiz).querySelector<HTMLInputElement>('#designar-numero')!;
+    expect(raiz.activeElement).toBe(campo);
+    await mudar(campo, `processo ${N102.replace(/\D/g, '')}.`);
+    expect(campo.value).toBe(N102);
+    await new Promise((r) => setTimeout(r, 400));
+    expect(lidos.some((l) => l.includes('agrupamentotarefas'))).toBe(false);
+  });
+
+  it('D99: o ícone depois do número copia o número; o "(+)" diz o que é', async () => {
+    const escrever = vi.fn(async (_texto: string) => {});
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: escrever } });
+    const { dia } = await abrirComVaga();
+    const linha = [...dia(D1).querySelectorAll('tr')].find((tr) => tr.textContent?.includes('AUTOR 11'))!;
+    const copiar = linha.querySelector<HTMLButtonElement>('.botao-copiar')!;
+    expect(copiar.title).toBe('Copiar o número');
+    expect(copiar.querySelector('[data-icone="copiar"]')).not.toBeNull();
+    copiar.click();
+    await vi.waitFor(() => expect(copiar.title).toBe('Copiado!'));
+    expect(copiar.querySelector('[data-icone="ok"]')).not.toBeNull();
+    expect(escrever).toHaveBeenCalledWith('0000111-52.2026.5.09.0001');
+    const mais = linha.querySelector<HTMLElement>('.mais-partes')!;
+    expect(mais.textContent?.trim()).toBe('(+)');
+    expect(mais.title).toBe('Há mais partes neste polo. O ícone de pessoa mostra todas, com os advogados.');
+  });
+
+  it('D100: o "+" da vaga, o "×" e o "(?)" viram ícones nossos, com o mesmo nome no tooltip e para o leitor de tela', async () => {
+    const { dia } = await abrirComVaga();
+    const mais = dia(D1).querySelector<HTMLButtonElement>('.botao-mais')!;
+    expect(mais.querySelector('svg[data-icone="calendario-mais"]')).not.toBeNull();
+    expect([mais.textContent?.trim(), mais.title, mais.getAttribute('aria-label')]).toEqual(['', 'Designar nesta vaga, às 09:10', 'Designar nesta vaga, às 09:10']);
+    const linha = [...dia(D1).querySelectorAll('tr')].find((tr) => tr.textContent?.includes('AUTOR 11'))!;
+    const cancelar = linha.querySelector<HTMLButtonElement>('.botao-cancelar')!;
+    expect(cancelar.querySelector('svg[data-icone="lixeira"]')).not.toBeNull();
+    expect([cancelar.textContent?.trim(), cancelar.getAttribute('aria-label')]).toEqual(['', 'Cancelar a audiência das 09:00']);
+    const ajuda = linha.querySelector<HTMLButtonElement>('.botao-ajuda')!;
+    expect(ajuda.querySelector('svg[data-icone="pessoa"]')).not.toBeNull();
+    expect(ajuda.textContent?.trim()).toBe('');
+    expect(ajuda.getAttribute('aria-label')).toBe('Advogados: passe o mouse ou clique para consultar');
+    // O "+ Designar" do dia continua com o texto.
+    expect(botoes(dia(D1), /^\+ Designar$/)).toHaveLength(1);
+    // Nenhum símbolo antigo sobrou na linha.
+    expect(linha.textContent).not.toMatch(/\(\?\)|×\s*$/);
+  });
+
+  it('"+" com processo que já tem audiência no órgão: avisa antes que redesigna (D89d, D32)', async () => {
+    const { raiz, dia } = await abrirComVaga();
+    dia(D1).querySelector<HTMLButtonElement>('.botao-mais')!.click();
+    await nextTick();
+    await buscarProcesso(raiz, N102);
+    await vi.waitFor(() =>
+      expect(janela(raiz).textContent).toContain(
+        'Este processo já tem audiência em 20/11/2026 10:00 (Instrução, Sala 02 Cejusc-CSC). Ela será redesignada para seg, 09/11, 09:10.',
+      ),
+    );
+    expect(janela(raiz).textContent).toContain('Redesignar audiência');
+  });
+
+  it('"+" com processo de outro órgão: não segue, com o motivo (D27)', async () => {
+    const { raiz, dia } = await abrirComVaga();
+    dia(D1).querySelector<HTMLButtonElement>('.botao-mais')!.click();
+    await nextTick();
+    await buscarProcesso(raiz, N109);
+    await vi.waitFor(() => expect(janela(raiz).textContent).toContain('tramita em outro órgão'));
+    expect(janela(raiz).textContent).not.toContain('Designar audiência');
+  });
+
+  it('"+" do dia: a hora fica livre; no dia bloqueado, o "+" fica desabilitado (D34)', async () => {
+    const { raiz, dia, mostrar } = await abrirComVaga();
+    botoes(dia(D1), /^\+ Designar$/)[0]!.click();
+    await nextTick();
+    expect(janela(raiz).textContent).toContain('Designar · seg, 09/11 · Sala 01 Cejusc-CSC');
+    await buscarProcesso(raiz, N101);
+    await vi.waitFor(() => expect(janela(raiz).querySelector('input[type="time"]')).not.toBeNull());
+    const hora = janela(raiz).querySelector<HTMLInputElement>('input[type="time"]')!;
+    expect([hora.value, hora.disabled]).toEqual(['', false]);
+    janela(raiz).querySelector<HTMLButtonElement>('.fechar')!.click();
+    await nextTick();
+    await mostrar([D3]);
+    await vi.waitFor(() => expect(botoes(dia(D3), /^\+ Designar$/)[0]!.disabled).toBe(true));
+    expect(botoes(dia(D3), /^\+ Designar$/)[0]!.title).toBe('Dia bloqueado: Feriado municipal');
+  });
+
+  it('"×" em simulação: confirma, monta o PATCH com [idAudiencia] e lança o GIGS opcional, sem enviar', async () => {
+    const { raiz, dia } = await abrirComVaga();
+    const linha = [...dia(D1).querySelectorAll('tr')].find((tr) => tr.textContent?.includes('AUTOR 11'))!;
+    linha.querySelector<HTMLButtonElement>('.botao-cancelar')!.click();
+    await nextTick();
+    const j = janela(raiz);
+    expect(j.textContent).toContain('Cancelar a audiência de seg, 09/11, 09:00 (Conciliação em Conhecimento por videoconferência) do processo 0000111-52.2026.5.09.0001?');
+    expect(j.textContent).toContain('Pode ser necessário despacho ou intimação.');
+    // GIGS: a sugestão "Analisar".
+    await mudar([...j.querySelectorAll('select')].find((s) => [...s.options].some((o) => o.textContent === 'Analisar'))!, 's1');
+    // D99: o "Fechar" está lá desde o começo, por último na linha da ação, e não muda de nome.
+    const linhaAcao = botoes(j, /^Simular o cancelamento$/)[0]!.parentElement!;
+    expect(linhaAcao.lastElementChild?.textContent?.trim()).toBe('Fechar');
+    expect(botoes(j, /^Voltar$/)).toEqual([]);
+    botoes(j, /^Simular o cancelamento$/)[0]!.click();
+    await vi.waitFor(() => expect(j.textContent).toContain('Simulação concluída'));
+    expect(j.textContent).toContain('PATCH https://pje.trt9.jus.br/pje-comum-api/api/pautasaudiencias/audiencias/cancelamento');
+    expect(j.textContent).toMatch(/\[\s*9011\s*\]/);
+    expect(j.textContent).toContain('Lançar o GIGS');
+    expect(escritas()).toEqual([]);
+    expect(botoes(j, /^Simular o cancelamento$/)[0]!.disabled).toBe(true);
+    expect(linhaAcao.lastElementChild?.textContent?.trim()).toBe('Fechar');
+    expect((linhaAcao.lastElementChild as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('"×" real: cancela, confirma relendo o dia, e a Pauta relê o dia', async () => {
+    const { raiz, dia, texto } = await abrirComVaga({ real: true });
+    expect(texto()).toContain('designar e cancelar gravam no PJe, com confirmação');
+    const linha = [...dia(D1).querySelectorAll('tr')].find((tr) => tr.textContent?.includes('AUTOR 11'))!;
+    linha.querySelector<HTMLButtonElement>('.botao-cancelar')!.click();
+    await nextTick();
+    const j = janela(raiz);
+    expect(j.textContent).toContain('ENVIO REAL');
+    botoes(j, /^Cancelar a audiência no PJe$/)[0]!.click();
+    await vi.waitFor(() => expect(j.textContent).toContain('Audiência cancelada.'));
+    expect(escritas().map(([url, init]) => `${(init as RequestInit).method} ${new URL(String(url)).pathname} ${String((init as RequestInit).body)}`)).toEqual([
+      'PATCH /pje-comum-api/api/pautasaudiencias/audiencias/cancelamento [9011]',
+    ]);
+    botoes(j, /^Fechar$/)[0]!.click();
+    await vi.waitFor(() => expect(dia(D1).textContent).not.toContain('AUTOR 11'));
+  });
+
+  it('"×" desabilitado, com o motivo, quando o processo tramita em outro órgão (D27)', async () => {
+    const { mostrar, dia } = await abrir();
+    await mostrar([D2]);
+    await vi.waitFor(() => expect(dia(D2).textContent).toContain('15:00'));
+    const linha = [...dia(D2).querySelectorAll('tr')].find((tr) => tr.textContent?.includes('15:00'))!;
+    const x = linha.querySelector<HTMLButtonElement>('.botao-cancelar')!;
+    expect(x.disabled).toBe(true);
+    expect(x.title).toContain('tramita em outro órgão');
+  });
+
+  it('em outro órgão: sem "+" nem "×", só leitura', async () => {
+    const { raiz, mostrar, escolher, dia, texto } = await abrir();
+    await mostrar([D1]);
+    await escolher('pauta-orgao', '1 vtcsv');
+    await vi.waitFor(() => expect(dia(D1).textContent).toContain('AUTOR 21'));
+    expect(texto()).toContain('só leitura: nada é gravado no PJe');
+    expect(raiz.querySelector('.botao-mais-dia, .botao-mais, .botao-cancelar')).toBeNull();
+  });
+
+  it('em "Todas as salas" (D98): o "+" da vaga e o "×" usam a sala da linha; o "+ Designar" do dia deixa escolher a sala', async () => {
+    const { raiz, mostrar, escolher, dia } = await abrir();
+    await mostrar([D1]);
+    await escolher('pauta-sala', 'todas');
+    await vi.waitFor(() => expect(dia(D1).textContent).toContain('2 audiências · 1 vaga livre'));
+    dia(D1).querySelector<HTMLButtonElement>('.botao-mais')!.click();
+    await nextTick();
+    expect(janela(raiz).textContent).toContain('Designar · seg, 09/11 · Sala 01 Cejusc-CSC · 09:10');
+    janela(raiz).querySelector<HTMLButtonElement>('.fechar')!.click();
+    await nextTick();
+    const linha12 = [...dia(D1).querySelectorAll('tr')].find((tr) => tr.textContent?.includes('AUTOR 12'))!;
+    linha12.querySelector<HTMLButtonElement>('.botao-cancelar')!.click();
+    await nextTick();
+    expect(janela(raiz).textContent).toContain('Cancelar audiência · seg, 09/11 · Sala 02 Cejusc-CSC · 08:30');
+    janela(raiz).querySelector<HTMLButtonElement>('.fechar')!.click();
+    await nextTick();
+    botoes(dia(D1), /^\+ Designar$/)[0]!.click();
+    await nextTick();
+    expect(janela(raiz).textContent).toContain('Designar · seg, 09/11 · escolha a sala no formulário');
+    await buscarProcesso(raiz, N101);
+    await vi.waitFor(() => expect(janela(raiz).querySelector('.grade select')).not.toBeNull());
+    const sala = janela(raiz).querySelector<HTMLSelectElement>('.grade select')!;
+    expect(sala.disabled).toBe(false);
+    expect([...sala.options].map((o) => o.textContent)).toEqual(['Sala 01 Cejusc-CSC', 'Sala 02 Cejusc-CSC']);
   });
 });

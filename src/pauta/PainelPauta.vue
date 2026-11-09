@@ -1,13 +1,19 @@
 <script setup lang="ts">
-// A Pauta (3.2, §2.7), só leitura nesta entrega: filtros no topo (D90), lista contínua a partir de
-// hoje (D91) e a pauta de cada dia lida quando ele chega perto da tela (D92).
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+// A Pauta (3.2, §2.7): filtros no topo (D90), lista contínua a partir de hoje (D91) e a pauta de
+// cada dia lida quando ele chega perto da tela (D92); "Todas as salas" junta a pauta de cada sala
+// (D95). No órgão logado, o "+" designa e o "×" cancela, uma audiência por vez (D89b–D89e), também
+// em "Todas as salas" (D98); nos outros órgãos, só leitura.
+import { computed, onMounted, onUnmounted, ref, shallowRef } from 'vue';
 import CampoBusca from '../componentes/CampoBusca.vue';
+import Icone from '../componentes/Icone.vue';
 import type { OpcaoBusca } from '../componentes/opcaoBusca';
 import type { Opcoes, OrgaoConhecido } from '../config/opcoes';
 import type { Armazenamento } from '../ext/api';
+import { ESCRITA_LIBERADA } from '../fluxo/executor';
 import type { Ambiente } from '../pje/ambiente';
+import CancelarPauta from './CancelarPauta.vue';
 import type { LeitorPauta } from './dados';
+import DesignarPauta from './DesignarPauta.vue';
 import DiagnosticoPauta from './DiagnosticoPauta.vue';
 import { usePauta, type EstadoDia, type FocoPauta, type LinhaPauta } from './estadoPauta';
 import { rotuloDoDia, rotuloDoOrgao } from './orgaos';
@@ -38,14 +44,68 @@ const e = p.estado;
 const mostrarDiagnostico = ref(false);
 const lista = ref<HTMLElement | null>(null);
 
+// ── O "+" e o "×" (D89b–D89e) ─────────────────────────────────────────────────────────────────
+/** Como no Individual: o modo simulação das Opções, ou a escrita travada no código (D39). */
+const simulando = props.opcoes.simulacao || !ESCRITA_LIBERADA;
+type Sala = { id: number; nome: string };
+type Acao =
+  /** Sem `sala`: o "+ Designar" do dia em "Todas as salas"; a sala se escolhe no formulário (D98). */
+  | { tipo: 'designar'; sala?: Sala; dia: string; hora?: string }
+  | { tipo: 'cancelar'; sala: Sala; dia: string; linha: LinhaPauta };
+const acao = shallowRef<Acao | null>(null);
+
+/** A sala de uma linha: a escolhida ou, em "Todas as salas", a da própria linha (D98). */
+function salaDaLinha(l?: LinhaPauta): Sala | undefined {
+  if (l?.idSala !== undefined) return p.orgao()?.salas.find((s) => s.id === l.idSala);
+  return p.salaEscolhida();
+}
+
+/** O que o cabeçalho diz do órgão escolhido: só leitura, simulação ou envio real. */
+const textoModo = computed(() => {
+  if (!p.orgao()?.logado) return 'só leitura: nada é gravado no PJe';
+  return simulando ? 'SIMULAÇÃO: designar e cancelar não gravam nada' : 'designar e cancelar gravam no PJe, com confirmação';
+});
+
+/** D89e: o "×" fica desabilitado, com o motivo, quando não dá para cancelar. */
+function motivoSemCancelar(l: LinhaPauta): string | null {
+  if (l.idAudiencia === undefined || l.idProcesso === undefined) return 'A pauta não trouxe o id da audiência';
+  if (!l.processo) return 'A pauta não trouxe o processo';
+  if (l.processo.orgaoId !== p.logado?.id) return `O processo tramita em outro órgão${l.processo.orgaoDescricao ? ` (${l.processo.orgaoDescricao})` : ''}: não dá para mexer na audiência (D27)`;
+  return null;
+}
+
+/** O "+": da vaga (com a linha, a sala e a hora dela) ou do dia (sem linha). */
+function abrirDesignar(dia: string, linha?: LinhaPauta) {
+  if (p.diaBloqueado(dia)) return;
+  const sala = salaDaLinha(linha);
+  // Fora de "Todas as salas", a sala é sempre conhecida; dentro, só a vaga a traz.
+  if (!sala && e.sala !== 'todas') return;
+  acao.value = { tipo: 'designar', dia, ...(sala ? { sala } : {}), ...(linha ? { hora: linha.hora } : {}) };
+}
+
+function abrirCancelar(dia: string, linha: LinhaPauta) {
+  const sala = salaDaLinha(linha);
+  if (!sala || motivoSemCancelar(linha)) return;
+  acao.value = { tipo: 'cancelar', sala, dia, linha };
+}
+
+/** Gravou de verdade: relê o dia e, na redesignação, o dia de onde a audiência saiu (D89d). */
+function gravou(deOnde?: { idSala: number; dia: string }) {
+  const a = acao.value;
+  if (a?.sala) p.relerDia(a.sala.id, a.dia);
+  // A sala foi escolhida no formulário (D98): relê o dia em todas.
+  else if (a) p.relerDiaEmTodas(a.dia);
+  if (deOnde) p.relerDia(deOnde.idSala, deOnde.dia);
+}
+
 // ── Filtros ──────────────────────────────────────────────────────────────────────────────────
 const opcoesOrgao = computed<OpcaoBusca[]>(() => e.orgaos.map((o) => ({ valor: String(o.id), rotulo: rotuloDoOrgao(o), detalhe: o.nome })));
 const opcoesSala = computed<OpcaoBusca[]>(() => {
   const o = p.orgao();
   if (!o) return [];
   const salas = o.salas.map((s) => ({ valor: String(s.id), rotulo: s.nome }));
-  // D92b: a visão geral do órgão, pelo AUD4; o detalhe diz o que ela não traz, sem faixa nova na tela.
-  return o.salas.length > 1 ? [...salas, { valor: 'todas', rotulo: 'Todas as salas', detalhe: 'visão geral, sem partes nem vagas' }] : salas;
+  // D95: a pauta de cada sala, junta pela hora.
+  return o.salas.length > 1 ? [...salas, { valor: 'todas', rotulo: 'Todas as salas', detalhe: 'a pauta de cada sala, junta' }] : salas;
 });
 const opcoesMes = computed<OpcaoBusca[]>(() => e.meses.map((m) => ({ valor: m.chave, rotulo: m.rotulo })));
 
@@ -142,11 +202,8 @@ function resumoDoDia(d: EstadoDia): string {
   if (d.estado === 'erro') return 'erro ao consultar';
   const aud = d.linhas.filter((l) => l.tipo === 'audiencia').length;
   const vagas = d.linhas.length - aud;
-  const audiencias = `${aud} audiência${aud === 1 ? '' : 's'}`;
-  // "Todas as salas" (D92b): o AUD4 não traz as vagas, então só conta as audiências.
-  if (todasAsSalas.value) return aud ? audiencias : 'sem audiências';
   if (!d.linhas.length) return 'sem pauta';
-  return `${audiencias} · ${vagas} vaga${vagas === 1 ? '' : 's'} livre${vagas === 1 ? '' : 's'}`;
+  return `${aud} audiência${aud === 1 ? '' : 's'} · ${vagas} vaga${vagas === 1 ? '' : 's'} livre${vagas === 1 ? '' : 's'}`;
 }
 
 function textoAviso(dia: string, d: EstadoDia): { classe: string; texto: string } | null {
@@ -157,11 +214,23 @@ function textoAviso(dia: string, d: EstadoDia): { classe: string; texto: string 
   return { classe: 'erro-texto', texto: aud ? `${a.texto}: há ${aud} audiência(s), será necessário redesignar` : a.texto };
 }
 
-const polo = (x?: { nome: string; varios: boolean }) => (x ? `${x.nome}${x.varios ? ' (+)' : ''}` : '—');
-function partes(l: LinhaPauta): string {
-  if (l.segredo) return 'Segredo de justiça';
-  return `${polo(l.poloAtivo)} × ${polo(l.poloPassivo)}`;
+/** D99: o "(+)" depois do nome diz o que é, ao passar o mouse. */
+const DICA_MAIS_PARTES = 'Há mais partes neste polo. O ícone de pessoa mostra todas, com os advogados.';
+
+/** D99: o número copiado agora (o ícone vira um "✓" por um instante). */
+const copiado = ref<string | null>(null);
+let temporizadorCopia: ReturnType<typeof setTimeout> | undefined;
+async function copiarNumero(numero: string) {
+  clearTimeout(temporizadorCopia);
+  try {
+    await navigator.clipboard.writeText(numero);
+    copiado.value = numero;
+    temporizadorCopia = setTimeout(() => (copiado.value = null), 1500);
+  } catch {
+    copiado.value = null;
+  }
 }
+onUnmounted(() => clearTimeout(temporizadorCopia));
 
 function dicaAdvogados(idProcesso?: number): string {
   if (idProcesso === undefined) return '';
@@ -185,7 +254,7 @@ const ehDestaque = (dia: string, l: LinhaPauta) =>
           <span>logado em {{ p.logado.descricao }}</span>
         </template>
         <span class="separador">|</span>
-        <span>só leitura: nada é gravado no PJe</span>
+        <span :class="{ 'modo-real': p.orgao()?.logado && !simulando }">{{ textoModo }}</span>
         <button class="acao secundaria pequena botao-diagnostico" type="button" title="A prova técnica da Pauta (entrega 0)" @click="mostrarDiagnostico = true">
           Diagnóstico
         </button>
@@ -236,6 +305,23 @@ const ehDestaque = (dia: string, l: LinhaPauta) =>
                   <template v-for="aviso in [textoAviso(dia, d)]" :key="dia">
                     <span v-if="aviso" :class="aviso.classe"> · {{ aviso.texto }}</span>
                   </template>
+                  <!-- D89c: o "+" do dia, com o horário de início; o único caminho em sala sem vagas. Não há em dia bloqueado (D34). -->
+                  <button
+                    v-if="p.podeGravar()"
+                    class="acao secundaria pequena botao-mais-dia"
+                    type="button"
+                    :disabled="Boolean(p.diaBloqueado(dia))"
+                    :title="
+                      p.diaBloqueado(dia)
+                        ? `Dia bloqueado: ${p.diaBloqueado(dia)}`
+                        : todasAsSalas
+                          ? 'Designar neste dia, com a sala e o horário escolhidos no formulário'
+                          : 'Designar neste dia, com o horário de início'
+                    "
+                    @click="abrirDesignar(dia)"
+                  >
+                    + Designar
+                  </button>
                 </header>
                 <div v-if="d.estado === 'espera' || d.estado === 'carregando'" class="esqueleto" aria-hidden="true">
                   <span></span>
@@ -245,7 +331,7 @@ const ehDestaque = (dia: string, l: LinhaPauta) =>
                   <button class="acao secundaria pequena" type="button" @click="p.tentarDeNovo(dia)">Tentar de novo</button>
                 </div>
                 <p v-else-if="!d.linhas.length" class="vazio-dia suave">
-                  {{ todasAsSalas ? 'Não há audiências neste dia em nenhuma sala' : 'Não há audiências nem vagas configuradas para esta sala neste dia' }}
+                  {{ todasAsSalas ? 'Não há audiências nem vagas configuradas em nenhuma sala neste dia' : 'Não há audiências nem vagas configuradas para esta sala neste dia' }}
                 </p>
                 <template v-else>
                   <p v-if="d.erro" class="aviso-texto vazio-dia">{{ d.erro }}</p>
@@ -262,17 +348,45 @@ const ehDestaque = (dia: string, l: LinhaPauta) =>
                         <span class="selo-vaga">Vaga livre</span>
                         <span v-if="l.descricaoTipo" class="suave"> · {{ l.descricaoTipo }}</span>
                       </td>
+                      <!-- D89c: o "+" da vaga designa nela, na hora dela. -->
+                      <td v-if="l.tipo === 'vaga' && p.podeGravar()" class="acoes-linha">
+                        <!-- D100: o "+" da vaga virou o calendário com "+". -->
+                        <button
+                          class="acao secundaria pequena botao-icone botao-mais"
+                          type="button"
+                          :disabled="Boolean(p.diaBloqueado(dia))"
+                          :title="p.diaBloqueado(dia) ? `Dia bloqueado: ${p.diaBloqueado(dia)}` : `Designar nesta vaga, às ${l.hora}`"
+                          :aria-label="`Designar nesta vaga, às ${l.hora}`"
+                          @click="abrirDesignar(dia, l)"
+                        >
+                          <Icone nome="calendario-mais" />
+                        </button>
+                      </td>
                       <template v-else>
                         <td class="numero">
-                          <a :href="urlProcesso(l.idProcesso)" target="_blank" rel="noopener noreferrer" title="Abrir o processo numa aba nova">{{ l.nrProcesso ?? l.idProcesso }}</a>
+                          <span class="numero-com-copia">
+                            <a :href="urlProcesso(l.idProcesso)" target="_blank" rel="noopener noreferrer" title="Abrir o processo numa aba nova">{{ l.nrProcesso ?? l.idProcesso }}</a>
+                            <!-- D99: copiar o número; o ícone é um SVG nosso, sem pacote de ícones (D100). -->
+                            <button
+                              v-if="l.nrProcesso"
+                              :class="['botao-copiar', { copiado: copiado === l.nrProcesso }]"
+                              type="button"
+                              :title="copiado === l.nrProcesso ? 'Copiado!' : 'Copiar o número'"
+                              :aria-label="copiado === l.nrProcesso ? 'Copiado!' : `Copiar o número ${l.nrProcesso}`"
+                              @click="copiarNumero(l.nrProcesso)"
+                            >
+                              <Icone :nome="copiado === l.nrProcesso ? 'ok' : 'copiar'" />
+                            </button>
+                          </span>
                         </td>
-                        <!-- "Todas as salas" (D92b): o AUD4 não traz partes nem segredo de justiça; no lugar, a classe. -->
-                        <td v-if="todasAsSalas" class="classe-linha">{{ l.processo?.classeSigla ?? '' }}</td>
-                        <td v-else class="partes-linha">
-                          {{ partes(l) }}
+                        <td class="partes-linha">
+                          <template v-if="l.segredo">Segredo de justiça</template>
+                          <!-- Numa linha só: o Vue não descarta os espaços entre os nomes e o "(+)". -->
+                          <template v-else>{{ l.poloAtivo?.nome ?? '—' }}<span v-if="l.poloAtivo?.varios" class="mais-partes" :title="DICA_MAIS_PARTES"> (+)</span> × {{ l.poloPassivo?.nome ?? '—' }}<span v-if="l.poloPassivo?.varios" class="mais-partes" :title="DICA_MAIS_PARTES"> (+)</span></template>
+                          <!-- D100: o "(?)" dos advogados virou o ícone de pessoa. -->
                           <button
                             v-if="l.idProcesso !== undefined && !l.segredo"
-                            class="ajuda botao-ajuda"
+                            class="botao-ajuda"
                             type="button"
                             :title="dicaAdvogados(l.idProcesso)"
                             :aria-label="dicaAdvogados(l.idProcesso)"
@@ -280,12 +394,25 @@ const ehDestaque = (dia: string, l: LinhaPauta) =>
                             @focus="p.pedirAdvogados(l.idProcesso!)"
                             @click="p.pedirAdvogados(l.idProcesso!)"
                           >
-                            (?)
+                            <Icone nome="pessoa" />
                           </button>
                         </td>
                         <td class="tipo-linha">
                           {{ l.descricaoTipo ?? '—' }}
                           <span v-if="l.processo?.juizoDigital" class="selo-digital">100% Digital</span>
+                        </td>
+                        <!-- D89e: o "×" cancela; desabilitado, com o motivo, quando não dá. D100: virou a lixeira. -->
+                        <td v-if="p.podeGravar()" class="acoes-linha">
+                          <button
+                            class="acao secundaria pequena botao-icone botao-cancelar"
+                            type="button"
+                            :disabled="Boolean(motivoSemCancelar(l))"
+                            :title="motivoSemCancelar(l) ?? `Cancelar a audiência das ${l.hora}`"
+                            :aria-label="`Cancelar a audiência das ${l.hora}`"
+                            @click="abrirCancelar(dia, l)"
+                          >
+                            <Icone nome="lixeira" />
+                          </button>
                         </td>
                       </template>
                     </tr>
@@ -304,6 +431,32 @@ const ehDestaque = (dia: string, l: LinhaPauta) =>
     </div>
   </div>
   <DiagnosticoPauta v-if="mostrarDiagnostico" :ambiente="ambiente" :versao="versao" :ao-fechar="() => (mostrarDiagnostico = false)" />
+  <!-- O "+" e o "×" abrem por cima da Pauta, que fica montada e relê o dia quando gravam. -->
+  <DesignarPauta
+    v-if="acao?.tipo === 'designar' && p.logado"
+    :ambiente="ambiente"
+    :opcoes="opcoes"
+    :simulando="simulando"
+    :id-orgao-logado="p.logado.id"
+    :sala="acao.sala"
+    :dia="acao.dia"
+    :hora="acao.hora"
+    :ao-fechar="() => (acao = null)"
+    :ao-gravar="gravou"
+  />
+  <CancelarPauta
+    v-if="acao?.tipo === 'cancelar' && p.logado"
+    :ambiente="ambiente"
+    :opcoes="opcoes"
+    :simulando="simulando"
+    :id-orgao-logado="p.logado.id"
+    :descricao-orgao="p.logado.descricao"
+    :sala="acao.sala"
+    :dia="acao.dia"
+    :linha="acao.linha"
+    :ao-fechar="() => (acao = null)"
+    :ao-gravar="() => gravou()"
+  />
 </template>
 
 <style>
@@ -343,15 +496,44 @@ const ehDestaque = (dia: string, l: LinhaPauta) =>
 .tabela-pauta td { padding: 4px 8px; vertical-align: middle; }
 .tabela-pauta .hora { width: 52px; font-variant-numeric: tabular-nums; }
 .tabela-pauta .sala-linha { width: 150px; color: var(--cor-suave); }
-.tabela-pauta .numero { width: 210px; }
+.tabela-pauta .numero { width: 236px; }
 .tabela-pauta .numero a { color: var(--cor-marca); text-decoration: none; font-variant-numeric: tabular-nums; }
 .tabela-pauta .numero a:hover { text-decoration: underline; }
 .tabela-pauta .tipo-linha { width: 34%; }
-.tabela-pauta .classe-linha { width: 90px; color: var(--cor-suave); }
+.botao-mais-dia { margin-left: 10px; }
+.tabela-pauta .acoes-linha { width: 40px; text-align: right; }
+/* D100: botões só com ícone, centrado, na altura de um botão pequeno de texto. */
+.botao-icone { display: inline-flex; align-items: center; justify-content: center; min-width: 28px; height: 23px; padding: 0 6px; box-sizing: border-box; vertical-align: middle; }
+.botao-cancelar:not(:disabled) { color: var(--cor-erro); border-color: #e3a29c; }
+.cabecalho-pauta .modo-real { color: #8a4500; font-weight: 700; }
 .linha-vaga td { background: #fff4e5; border-top: 1px dashed #f0a35b; border-bottom: 1px dashed #f0a35b; }
 .selo-vaga { font-size: 11px; font-weight: 700; color: #a35a00; }
 .selo-digital { margin-left: 6px; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 999px; background: #e8f0fe; color: #1a56c4; white-space: nowrap; }
 .linha-audiencia.destaque td { background: var(--cor-aviso-fundo); font-weight: 600; }
-.botao-ajuda { border: 0; background: none; padding: 0 2px; font: inherit; }
+.botao-ajuda { display: inline-flex; align-items: center; vertical-align: middle; margin-left: 4px; border: 0; background: none; padding: 1px 2px; color: var(--cor-marca); cursor: help; }
+/* D99: o "(+)" do polo explica a si mesmo. */
+.mais-partes { cursor: help; color: var(--cor-suave); }
+.numero-com-copia { display: inline-flex; align-items: center; gap: 4px; }
+.botao-copiar { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; padding: 0; border: 1px solid transparent; border-radius: 4px; background: none; color: var(--cor-suave); cursor: pointer; }
+.botao-copiar:hover, .botao-copiar:focus-visible { border-color: var(--cor-borda); color: var(--cor-marca); }
+.botao-copiar.copiado { color: var(--cor-ok); }
 .fim-pauta { display: flex; justify-content: center; padding: 16px 0; }
+
+/* Os diálogos do "+" e do "×" abrem por cima da Pauta, numa janela menor. O CSS deles fica aqui, e
+   não no componente de cada um: o de um componente só entra quando ele aparece pela primeira vez. */
+.fundo-acao { z-index: 2147483647; }
+.janela-acao { max-width: 680px; }
+.faixa-simulacao-acao {
+  background: var(--cor-erro-fundo); color: var(--cor-erro); font-weight: 700; font-size: 12px;
+  text-align: center; padding: 6px 10px; border-bottom: 1px solid #f1c4bf;
+}
+.faixa-real-acao {
+  background: #fff1e0; color: #8a4500; font-weight: 700; font-size: 12px;
+  text-align: center; padding: 6px 10px; border-bottom: 2px solid #f0a14a;
+}
+/* D99: o "Fechar" fica sempre na linha da ação, na ponta direita, e nunca vira outro botão. */
+.botao-fechar-acao { margin-left: auto; }
+/* D42, como no Individual: campo que não se aplica fica visivelmente desabilitado. */
+.janela-acao select:disabled, .janela-acao input:disabled { background: #d5dbe3; color: #5b6878; border-color: #c3cad4; cursor: not-allowed; }
+.janela-acao button:disabled { cursor: not-allowed; }
 </style>

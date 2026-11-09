@@ -3,6 +3,7 @@
 // - redesignar: redesigna/request_2 (PUT)
 // - 100% Digital: hars/d31d (PUT com o processo inteiro)
 // - GIGS: hars/*gigs* (POST)
+// - cancelar: hars/cancelamento (PATCH, D89e)
 // Tudo puro: quem envia é o executor (src/fluxo/executor.ts).
 
 export const caminhosEscrita = {
@@ -11,6 +12,8 @@ export const caminhosEscrita = {
   juizoDigital: (idProcesso: number) =>
     `/pje-comum-api/api/processos/${idProcesso}?alteracaoParcial=true&lancaMovimentoJuizoDigital=true`,
   gigs: () => '/pje-gigs-api/api/atividade',
+  /** Cancelar (D89e): PATCH, confirmado pela captura de 06/11/2026 (`hars/cancelamento/`). */
+  cancelar: () => '/pje-comum-api/api/pautasaudiencias/audiencias/cancelamento',
   /** Leitura auxiliar do GIGS: data final de um prazo em dias úteis, pelo calendário do órgão. */
   retornaPrazo: (dias: number, idOrgao: number, dataInicio: string) =>
     `/pje-gigs-api/api/atividade/retorna-prazo/${dias}?idOj=${idOrgao}&dataInicio=${dataInicio}`,
@@ -54,6 +57,14 @@ export function payloadDesignar(d: DadosDesignacao, validarHorario = true) {
     idProcesso: d.idProcesso,
     idSalaFisica: d.idSalaFisica,
   };
+}
+
+/**
+ * Cancelamento (D89e): só o id da audiência, numa lista, como na captura (`[3504573]`). O id é o
+ * `pautaAudienciaHorario.id` da pauta do dia.
+ */
+export function payloadCancelar(idAudiencia: number): number[] {
+  return [idAudiencia];
 }
 
 /** Redesignação (D32): troca a audiência antiga pela nova numa requisição só. */

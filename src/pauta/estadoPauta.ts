@@ -1,5 +1,5 @@
 // O estado da Pauta (3.2, §2.7): órgãos, sala, horizonte de meses e a pauta de cada dia, lida só
-// quando o dia chega perto da tela (D92). Nada aqui grava no PJe.
+// quando o dia chega perto da tela (D92). Aqui só se lê; quem grava são os diálogos do "+" e do "×".
 
 import { reactive } from 'vue';
 import type { Opcoes, OrgaoConhecido } from '../config/opcoes';
@@ -10,15 +10,7 @@ import { pjeGet } from '../pje/http';
 import { lerCookie, lerSessao } from '../pje/sessao';
 import { classificarData, hoje } from '../regras/calendario';
 import type { EntradaPauta } from '../regras/pauta';
-import {
-  carregarAdvogados,
-  carregarAudienciasDoOrgao,
-  carregarCalendario,
-  carregarDia,
-  carregarMes,
-  carregarOrgaos,
-  type LeitorPauta,
-} from './dados';
+import { carregarAdvogados, carregarCalendario, carregarDia, carregarMes, carregarOrgaos, type LeitorPauta } from './dados';
 import { FilaDeLeitura } from './fila';
 import {
   ehFimDeSemana,
@@ -52,9 +44,10 @@ export function focoDoProcesso(audiencias: Audiencia[], idOrgaoLogado: number, i
 
 export type ChaveSala = number | 'todas';
 
-/** Uma linha da lista: a entrada da pauta e, em "Todas as salas", a sala. */
+/** Uma linha da lista: a entrada da pauta e, em "Todas as salas", a sala dela (D95, D98). */
 export interface LinhaPauta extends EntradaPauta {
   sala?: string;
+  idSala?: number;
 }
 
 export interface EstadoDia {
@@ -110,8 +103,6 @@ export function usePauta(deps: DependenciasPauta) {
     dias: new Map<string, EstadoDia>(),
     /** `${idSala}|${AAAA-MM}` → dia do mês → código (D92); `null` se o mês não veio. */
     codigos: new Map<string, Map<number, string> | null>(),
-    /** "Todas as salas" (D92b): `${idOrgao}|${AAAA-MM}` → as audiências do órgão no mês, por dia. */
-    consolidado: new Map<string, { estado: 'carregando' | 'ok' | 'erro'; porDia: Map<string, LinhaPauta[]>; erro?: string }>(),
     calendarios: new Map<number, EventoCalendario[]>(),
     /** idProcesso → texto do "(?)", ou `null` enquanto carrega. */
     advogados: new Map<number, string | null>(),
@@ -129,24 +120,11 @@ export function usePauta(deps: DependenciasPauta) {
     return o && typeof estado.sala === 'number' ? o.salas.find((s) => s.id === estado.sala) : undefined;
   }
 
-  const chaveConsolidado = (dia: string) => (estado.idOrgao === null ? undefined : `${estado.idOrgao}|${dia.slice(0, 7)}`);
-
-  /** "Todas as salas" (D92b): o órgão inteiro, um mês numa consulta só, pelo AUD4. */
-  function pedirConsolidado(idOrgao: number, chaveMes: string) {
-    const chave = `${idOrgao}|${chaveMes}`;
-    if (estado.consolidado.has(chave)) return;
-    estado.consolidado.set(chave, { estado: 'carregando', porDia: new Map() });
-    const minha = geracao;
-    const inicio = chaveMes === hojeIso.slice(0, 7) ? hojeIso : `${chaveMes}-01`;
-    const fim = mesDaPauta(chaveMes).dias.at(-1)!;
-    void fila.executar(() => carregarAudienciasDoOrgao(ler, idOrgao, inicio, fim)).then(
-      (porDia) => {
-        if (minha === geracao) estado.consolidado.set(chave, { estado: 'ok', porDia });
-      },
-      (e: unknown) => {
-        if (minha === geracao) estado.consolidado.set(chave, { estado: 'erro', porDia: new Map(), erro: e instanceof Error ? e.message : String(e) });
-      },
-    );
+  /** As salas da seleção: a escolhida ou, em "Todas as salas", todas, pela pauta de cada uma (D95). */
+  function salasDaSelecao(): { id: number; nome: string }[] {
+    const o = orgao();
+    if (!o || estado.sala === null) return [];
+    return estado.sala === 'todas' ? o.salas : o.salas.filter((s) => s.id === estado.sala);
   }
 
   /** O mês da sala, lido uma vez (D92). Se ele não vier, os dias são consultados um a um. */
@@ -186,17 +164,13 @@ export function usePauta(deps: DependenciasPauta) {
   }
 
   /**
-   * D90: dia útil sempre aparece; fim de semana, só se tiver algo: pelo mês da sala ou, em "Todas
-   * as salas", pelas audiências do órgão. Isso chega com a primeira consulta do mês.
+   * D90: dia útil sempre aparece; fim de semana, só se o mês de alguma sala da seleção disser que
+   * ele tem algo. Os códigos chegam com a primeira consulta do mês.
    */
   function diaVisivel(dia: string): boolean {
     if (!ehFimDeSemana(dia)) return true;
-    if (estado.sala === 'todas') {
-      const chave = chaveConsolidado(dia);
-      return Boolean(chave && estado.consolidado.get(chave)?.porDia.get(dia)?.length);
-    }
-    const s = salaEscolhida();
-    return Boolean(s && temConteudo(estado.codigos.get(`${s.id}|${dia.slice(0, 7)}`)?.get(Number(dia.slice(8, 10)))));
+    const n = Number(dia.slice(8, 10));
+    return salasDaSelecao().some((s) => temConteudo(estado.codigos.get(`${s.id}|${dia.slice(0, 7)}`)?.get(n)));
   }
 
   function pedirCalendario(idOrgao: number) {
@@ -205,16 +179,12 @@ export function usePauta(deps: DependenciasPauta) {
     void fila.executar(() => carregarCalendario(ler, idOrgao)).then((eventos) => estado.calendarios.set(idOrgao, eventos));
   }
 
-  /** Um dia chegou perto da tela: lê a pauta dele na sala ou, em "Todas as salas", o mês do órgão (D92, D92b). */
+  /** Um dia chegou perto da tela: lê a pauta dele em cada sala da seleção (D92, D95). */
   function pedirDia(dia: string) {
     const o = orgao();
     if (!o) return;
     pedirCalendario(o.id);
-    if (estado.sala === 'todas') pedirConsolidado(o.id, dia.slice(0, 7));
-    else {
-      const s = salaEscolhida();
-      if (s) void pedirSalaDia(s.id, dia);
-    }
+    for (const s of salasDaSelecao()) void pedirSalaDia(s.id, dia);
   }
 
   function marcarVisivel(dia: string, visivel: boolean) {
@@ -224,17 +194,22 @@ export function usePauta(deps: DependenciasPauta) {
 
   const pedirVisiveis = () => [...visiveis].sort().forEach(pedirDia);
 
-  /** A pauta do dia na seleção atual; em "Todas as salas", as audiências do órgão naquele dia (D92b). */
+  /**
+   * A pauta do dia na seleção atual. Em "Todas as salas" (D95), a pauta de cada sala, junta pela
+   * hora, com a sala em cada linha; uma sala com erro não esconde as outras, mas avisa.
+   */
   function diaDaSelecao(dia: string): EstadoDia {
-    if (estado.sala === 'todas') {
-      const chave = chaveConsolidado(dia);
-      const c = chave === undefined ? undefined : estado.consolidado.get(chave);
-      if (!c) return { estado: 'espera', linhas: [] };
-      if (c.estado !== 'ok') return { estado: c.estado, linhas: [], ...(c.erro ? { erro: c.erro } : {}) };
-      return { estado: 'ok', linhas: c.porDia.get(dia) ?? [] };
-    }
-    const s = salaEscolhida();
-    return (s && estado.dias.get(`${s.id}|${dia}`)) || { estado: 'espera', linhas: [] };
+    const salas = salasDaSelecao();
+    const estados = salas.map((s) => ({ s, e: estado.dias.get(`${s.id}|${dia}`) }));
+    if (!salas.length || estados.some(({ e }) => !e || e.estado === 'espera')) return { estado: 'espera', linhas: [] };
+    if (estados.some(({ e }) => e!.estado === 'carregando')) return { estado: 'carregando', linhas: [] };
+    const erros = estados.filter(({ e }) => e!.estado === 'erro');
+    if (erros.length === estados.length) return { estado: 'erro', linhas: [], erro: erros[0]!.e!.erro };
+    if (estado.sala !== 'todas') return estados[0]!.e!;
+    const linhas = estados
+      .flatMap(({ s, e }) => e!.linhas.map((l): LinhaPauta => ({ ...l, sala: s.nome, idSala: s.id })))
+      .sort((a, b) => a.hora.localeCompare(b.hora) || (a.sala ?? '').localeCompare(b.sala ?? ''));
+    return erros.length ? { estado: 'ok', linhas, erro: `Não foi possível ler: ${erros.map(({ s }) => s.nome).join(', ')}` } : { estado: 'ok', linhas };
   }
 
   /** O aviso do calendário do órgão para o dia (D34): feriado ou suspensão bloqueia; só prazo, avisa. */
@@ -288,7 +263,6 @@ export function usePauta(deps: DependenciasPauta) {
     for (const chave of [...estado.dias.keys()]) if (daSala(chave)) estado.dias.delete(chave);
     for (const chave of [...promessasMes.keys()]) if (daSala(chave)) promessasMes.delete(chave);
     for (const chave of [...estado.codigos.keys()]) if (daSala(chave)) estado.codigos.delete(chave);
-    for (const chave of [...estado.consolidado.keys()]) if (chave.startsWith(`${o.id}|`)) estado.consolidado.delete(chave);
     estado.calendarios.delete(o.id);
     pedirVisiveis();
   }
@@ -297,6 +271,32 @@ export function usePauta(deps: DependenciasPauta) {
     if (estado.meses.length >= MESES_MAXIMOS) return;
     const ultimo = estado.meses[estado.meses.length - 1]!;
     estado.meses.push(mesDaPauta(mesSeguinte(ultimo.chave)));
+  }
+
+  // ── O "+" e o "×" (D89b–D89e, D98) ──────────────────────────────────────────────────────
+
+  /** Só no órgão logado (D5, D89): numa sala ou em "Todas as salas" (D98). */
+  const podeGravar = () => orgao()?.logado === true && estado.sala !== null;
+
+  /** D34: o dia bloqueado não tem "+" (fim de semana, suspensão de audiência ou de expediente). */
+  function diaBloqueado(dia: string): string | null {
+    if (ehFimDeSemana(dia)) return 'Fim de semana';
+    const aviso = avisoDoDia(dia);
+    return aviso?.nivel === 'bloqueia' ? aviso.texto : null;
+  }
+
+  /** Depois de gravar: esquece a pauta e o mês daquela sala e relê o dia, se estiver na tela. */
+  function relerDia(idSala: number, dia: string) {
+    estado.dias.delete(`${idSala}|${dia}`);
+    const mes = `${idSala}|${dia.slice(0, 7)}`;
+    promessasMes.delete(mes);
+    estado.codigos.delete(mes);
+    if (visiveis.has(dia)) pedirDia(dia);
+  }
+
+  /** D98: o "+ Designar" do dia em "Todas as salas" não sabe a sala: relê o dia em todas. */
+  function relerDiaEmTodas(dia: string) {
+    for (const s of orgao()?.salas ?? []) relerDia(s.id, dia);
   }
 
   function pedirAdvogados(idProcesso: number) {
@@ -345,15 +345,17 @@ export function usePauta(deps: DependenciasPauta) {
     atualizar,
     carregarMaisUmMes,
     pedirAdvogados,
+    podeGravar,
+    diaBloqueado,
+    relerDia,
+    relerDiaEmTodas,
+    salaEscolhida,
     iniciar,
     /** Lê de novo um dia que deu erro. */
     tentarDeNovo(dia: string) {
-      if (estado.sala === 'todas') {
-        const chave = chaveConsolidado(dia);
-        if (chave && estado.consolidado.get(chave)?.estado === 'erro') estado.consolidado.delete(chave);
-      } else {
-        const s = salaEscolhida();
-        if (s && estado.dias.get(`${s.id}|${dia}`)?.estado === 'erro') estado.dias.delete(`${s.id}|${dia}`);
+      for (const s of salasDaSelecao()) {
+        const chave = `${s.id}|${dia}`;
+        if (estado.dias.get(chave)?.estado === 'erro') estado.dias.delete(chave);
       }
       pedirDia(dia);
     },
