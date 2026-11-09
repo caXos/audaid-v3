@@ -585,6 +585,9 @@ describe('o "+" e o "×" no órgão logado (entrega 2, D89b–D89e)', () => {
     await vi.waitFor(() => expect(janela(raiz).querySelectorAll('.lista-sugestoes li')).toHaveLength(1));
     expect(lidos).toContain('/pje-comum-api/api/agrupamentotarefas/processos?numero=0000101-');
     expect(janela(raiz).querySelector('.lista-sugestoes li')!.textContent?.trim()).toBe(N101);
+    // Regressão do teste de 09/11/2026: o recuo das listas do cartão (`.cartao-corpo ul`) empurrava a sugestão.
+    const lista = janela(raiz).querySelector<HTMLElement>('.lista-sugestoes')!;
+    expect(getComputedStyle(lista).paddingLeft).toBe('0px');
     campo.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', cancelable: true }));
     await vi.waitFor(() => expect(janela(raiz).textContent).toContain('Designar audiência'));
     expect(campo.value).toBe(N101);
@@ -610,13 +613,33 @@ describe('o "+" e o "×" no órgão logado (entrega 2, D89b–D89e)', () => {
     const linha = [...dia(D1).querySelectorAll('tr')].find((tr) => tr.textContent?.includes('AUTOR 11'))!;
     const copiar = linha.querySelector<HTMLButtonElement>('.botao-copiar')!;
     expect(copiar.title).toBe('Copiar o número');
-    expect(copiar.querySelector('svg')).not.toBeNull();
+    expect(copiar.querySelector('[data-icone="copiar"]')).not.toBeNull();
     copiar.click();
     await vi.waitFor(() => expect(copiar.title).toBe('Copiado!'));
+    expect(copiar.querySelector('[data-icone="ok"]')).not.toBeNull();
     expect(escrever).toHaveBeenCalledWith('0000111-52.2026.5.09.0001');
     const mais = linha.querySelector<HTMLElement>('.mais-partes')!;
     expect(mais.textContent?.trim()).toBe('(+)');
-    expect(mais.title).toBe('Há mais partes neste polo. O (?) mostra todas, com os advogados.');
+    expect(mais.title).toBe('Há mais partes neste polo. O ícone de pessoa mostra todas, com os advogados.');
+  });
+
+  it('D100: o "+" da vaga, o "×" e o "(?)" viram ícones nossos, com o mesmo nome no tooltip e para o leitor de tela', async () => {
+    const { dia } = await abrirComVaga();
+    const mais = dia(D1).querySelector<HTMLButtonElement>('.botao-mais')!;
+    expect(mais.querySelector('svg[data-icone="calendario-mais"]')).not.toBeNull();
+    expect([mais.textContent?.trim(), mais.title, mais.getAttribute('aria-label')]).toEqual(['', 'Designar nesta vaga, às 09:10', 'Designar nesta vaga, às 09:10']);
+    const linha = [...dia(D1).querySelectorAll('tr')].find((tr) => tr.textContent?.includes('AUTOR 11'))!;
+    const cancelar = linha.querySelector<HTMLButtonElement>('.botao-cancelar')!;
+    expect(cancelar.querySelector('svg[data-icone="lixeira"]')).not.toBeNull();
+    expect([cancelar.textContent?.trim(), cancelar.getAttribute('aria-label')]).toEqual(['', 'Cancelar a audiência das 09:00']);
+    const ajuda = linha.querySelector<HTMLButtonElement>('.botao-ajuda')!;
+    expect(ajuda.querySelector('svg[data-icone="pessoa"]')).not.toBeNull();
+    expect(ajuda.textContent?.trim()).toBe('');
+    expect(ajuda.getAttribute('aria-label')).toBe('Advogados: passe o mouse ou clique para consultar');
+    // O "+ Designar" do dia continua com o texto.
+    expect(botoes(dia(D1), /^\+ Designar$/)).toHaveLength(1);
+    // Nenhum símbolo antigo sobrou na linha.
+    expect(linha.textContent).not.toMatch(/\(\?\)|×\s*$/);
   });
 
   it('"+" com processo que já tem audiência no órgão: avisa antes que redesigna (D89d, D32)', async () => {
@@ -684,7 +707,7 @@ describe('o "+" e o "×" no órgão logado (entrega 2, D89b–D89e)', () => {
 
   it('"×" real: cancela, confirma relendo o dia, e a Pauta relê o dia', async () => {
     const { raiz, dia, texto } = await abrirComVaga({ real: true });
-    expect(texto()).toContain('o "+" e o "×" gravam no PJe, com confirmação');
+    expect(texto()).toContain('designar e cancelar gravam no PJe, com confirmação');
     const linha = [...dia(D1).querySelectorAll('tr')].find((tr) => tr.textContent?.includes('AUTOR 11'))!;
     linha.querySelector<HTMLButtonElement>('.botao-cancelar')!.click();
     await nextTick();

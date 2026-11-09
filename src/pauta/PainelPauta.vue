@@ -5,6 +5,7 @@
 // em "Todas as salas" (D98); nos outros órgãos, só leitura.
 import { computed, onMounted, onUnmounted, ref, shallowRef } from 'vue';
 import CampoBusca from '../componentes/CampoBusca.vue';
+import Icone from '../componentes/Icone.vue';
 import type { OpcaoBusca } from '../componentes/opcaoBusca';
 import type { Opcoes, OrgaoConhecido } from '../config/opcoes';
 import type { Armazenamento } from '../ext/api';
@@ -62,7 +63,7 @@ function salaDaLinha(l?: LinhaPauta): Sala | undefined {
 /** O que o cabeçalho diz do órgão escolhido: só leitura, simulação ou envio real. */
 const textoModo = computed(() => {
   if (!p.orgao()?.logado) return 'só leitura: nada é gravado no PJe';
-  return simulando ? 'SIMULAÇÃO: o "+" e o "×" não gravam nada' : 'o "+" e o "×" gravam no PJe, com confirmação';
+  return simulando ? 'SIMULAÇÃO: designar e cancelar não gravam nada' : 'designar e cancelar gravam no PJe, com confirmação';
 });
 
 /** D89e: o "×" fica desabilitado, com o motivo, quando não dá para cancelar. */
@@ -214,7 +215,7 @@ function textoAviso(dia: string, d: EstadoDia): { classe: string; texto: string 
 }
 
 /** D99: o "(+)" depois do nome diz o que é, ao passar o mouse. */
-const DICA_MAIS_PARTES = 'Há mais partes neste polo. O (?) mostra todas, com os advogados.';
+const DICA_MAIS_PARTES = 'Há mais partes neste polo. O ícone de pessoa mostra todas, com os advogados.';
 
 /** D99: o número copiado agora (o ícone vira um "✓" por um instante). */
 const copiado = ref<string | null>(null);
@@ -349,15 +350,16 @@ const ehDestaque = (dia: string, l: LinhaPauta) =>
                       </td>
                       <!-- D89c: o "+" da vaga designa nela, na hora dela. -->
                       <td v-if="l.tipo === 'vaga' && p.podeGravar()" class="acoes-linha">
+                        <!-- D100: o "+" da vaga virou o calendário com "+". -->
                         <button
-                          class="acao secundaria pequena botao-mais"
+                          class="acao secundaria pequena botao-icone botao-mais"
                           type="button"
                           :disabled="Boolean(p.diaBloqueado(dia))"
                           :title="p.diaBloqueado(dia) ? `Dia bloqueado: ${p.diaBloqueado(dia)}` : `Designar nesta vaga, às ${l.hora}`"
                           :aria-label="`Designar nesta vaga, às ${l.hora}`"
                           @click="abrirDesignar(dia, l)"
                         >
-                          +
+                          <Icone nome="calendario-mais" />
                         </button>
                       </td>
                       <template v-else>
@@ -373,13 +375,7 @@ const ehDestaque = (dia: string, l: LinhaPauta) =>
                               :aria-label="copiado === l.nrProcesso ? 'Copiado!' : `Copiar o número ${l.nrProcesso}`"
                               @click="copiarNumero(l.nrProcesso)"
                             >
-                              <svg v-if="copiado === l.nrProcesso" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M3 8.5l3.2 3L13 4.5" />
-                              </svg>
-                              <svg v-else viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
-                                <rect x="5.5" y="5.5" width="8" height="8.5" rx="1.5" />
-                                <path d="M10.5 3.5V3a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 3v6.5A1.5 1.5 0 0 0 4 11h1.5" />
-                              </svg>
+                              <Icone :nome="copiado === l.nrProcesso ? 'ok' : 'copiar'" />
                             </button>
                           </span>
                         </td>
@@ -387,9 +383,10 @@ const ehDestaque = (dia: string, l: LinhaPauta) =>
                           <template v-if="l.segredo">Segredo de justiça</template>
                           <!-- Numa linha só: o Vue não descarta os espaços entre os nomes e o "(+)". -->
                           <template v-else>{{ l.poloAtivo?.nome ?? '—' }}<span v-if="l.poloAtivo?.varios" class="mais-partes" :title="DICA_MAIS_PARTES"> (+)</span> × {{ l.poloPassivo?.nome ?? '—' }}<span v-if="l.poloPassivo?.varios" class="mais-partes" :title="DICA_MAIS_PARTES"> (+)</span></template>
+                          <!-- D100: o "(?)" dos advogados virou o ícone de pessoa. -->
                           <button
                             v-if="l.idProcesso !== undefined && !l.segredo"
-                            class="ajuda botao-ajuda"
+                            class="botao-ajuda"
                             type="button"
                             :title="dicaAdvogados(l.idProcesso)"
                             :aria-label="dicaAdvogados(l.idProcesso)"
@@ -397,24 +394,24 @@ const ehDestaque = (dia: string, l: LinhaPauta) =>
                             @focus="p.pedirAdvogados(l.idProcesso!)"
                             @click="p.pedirAdvogados(l.idProcesso!)"
                           >
-                            (?)
+                            <Icone nome="pessoa" />
                           </button>
                         </td>
                         <td class="tipo-linha">
                           {{ l.descricaoTipo ?? '—' }}
                           <span v-if="l.processo?.juizoDigital" class="selo-digital">100% Digital</span>
                         </td>
-                        <!-- D89e: o "×" cancela; desabilitado, com o motivo, quando não dá. -->
+                        <!-- D89e: o "×" cancela; desabilitado, com o motivo, quando não dá. D100: virou a lixeira. -->
                         <td v-if="p.podeGravar()" class="acoes-linha">
                           <button
-                            class="acao secundaria pequena botao-cancelar"
+                            class="acao secundaria pequena botao-icone botao-cancelar"
                             type="button"
                             :disabled="Boolean(motivoSemCancelar(l))"
                             :title="motivoSemCancelar(l) ?? `Cancelar a audiência das ${l.hora}`"
                             :aria-label="`Cancelar a audiência das ${l.hora}`"
                             @click="abrirCancelar(dia, l)"
                           >
-                            ×
+                            <Icone nome="lixeira" />
                           </button>
                         </td>
                       </template>
@@ -505,21 +502,21 @@ const ehDestaque = (dia: string, l: LinhaPauta) =>
 .tabela-pauta .tipo-linha { width: 34%; }
 .botao-mais-dia { margin-left: 10px; }
 .tabela-pauta .acoes-linha { width: 40px; text-align: right; }
-.botao-mais, .botao-cancelar { min-width: 28px; font-weight: 700; }
+/* D100: botões só com ícone, centrado, na altura de um botão pequeno de texto. */
+.botao-icone { display: inline-flex; align-items: center; justify-content: center; min-width: 28px; height: 23px; padding: 0 6px; box-sizing: border-box; vertical-align: middle; }
 .botao-cancelar:not(:disabled) { color: var(--cor-erro); border-color: #e3a29c; }
 .cabecalho-pauta .modo-real { color: #8a4500; font-weight: 700; }
 .linha-vaga td { background: #fff4e5; border-top: 1px dashed #f0a35b; border-bottom: 1px dashed #f0a35b; }
 .selo-vaga { font-size: 11px; font-weight: 700; color: #a35a00; }
 .selo-digital { margin-left: 6px; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 999px; background: #e8f0fe; color: #1a56c4; white-space: nowrap; }
 .linha-audiencia.destaque td { background: var(--cor-aviso-fundo); font-weight: 600; }
-.botao-ajuda { border: 0; background: none; padding: 0 2px; font: inherit; }
+.botao-ajuda { display: inline-flex; align-items: center; vertical-align: middle; margin-left: 4px; border: 0; background: none; padding: 1px 2px; color: var(--cor-marca); cursor: help; }
 /* D99: o "(+)" do polo explica a si mesmo. */
 .mais-partes { cursor: help; color: var(--cor-suave); }
 .numero-com-copia { display: inline-flex; align-items: center; gap: 4px; }
 .botao-copiar { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; padding: 0; border: 1px solid transparent; border-radius: 4px; background: none; color: var(--cor-suave); cursor: pointer; }
 .botao-copiar:hover, .botao-copiar:focus-visible { border-color: var(--cor-borda); color: var(--cor-marca); }
 .botao-copiar.copiado { color: var(--cor-ok); }
-.botao-copiar svg { width: 14px; height: 14px; }
 .fim-pauta { display: flex; justify-content: center; padding: 16px 0; }
 
 /* Os diálogos do "+" e do "×" abrem por cima da Pauta, numa janela menor. O CSS deles fica aqui, e

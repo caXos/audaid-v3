@@ -149,11 +149,13 @@ defineExpose({ focar: () => entrada.value?.focus() });
 <style>
 .campo-numero-processo { position: relative; display: inline-block; }
 .campo-numero { width: 240px; font-variant-numeric: tabular-nums; }
-.lista-sugestoes {
-  position: absolute; z-index: 20; top: calc(100% + 2px); left: 0; min-width: 100%;
+/* Com o prefixo do campo: dentro de um cartão, o `.cartao-corpo ul` do CSS base (recuo de 18 px)
+   ganhava do `.lista-sugestoes` sozinho e empurrava a sugestão para a direita (teste de 09/11/2026). */
+.campo-numero-processo .lista-sugestoes {
+  position: absolute; z-index: 20; top: calc(100% + 2px); left: 0; box-sizing: border-box; width: max-content; min-width: 100%;
   max-height: 260px; overflow: auto; margin: 0; padding: 4px 0; list-style: none;
   background: var(--cor-fundo); border: 1px solid var(--cor-borda); border-radius: 6px; box-shadow: 0 6px 20px rgba(0,0,0,.18);
 }
-.lista-sugestoes li { padding: 5px 10px; cursor: pointer; font-variant-numeric: tabular-nums; }
-.lista-sugestoes li.ativa { background: #e6f4f5; }
+.campo-numero-processo .lista-sugestoes li { margin: 0; padding: 5px 10px; white-space: nowrap; cursor: pointer; font-variant-numeric: tabular-nums; }
+.campo-numero-processo .lista-sugestoes li.ativa { background: #e6f4f5; }
 </style>

@@ -41,7 +41,7 @@ export const VARIAVEIS_GIGS: readonly DefinicaoVariavel[] = [
   },
   { variavel: '{tipo}', descricao: 'tipo da audiência', padrao: /\{\s*tipo\s*\}/gi, valor: (d) => d.tipo },
   { variavel: '{sala}', descricao: 'sala da audiência', padrao: /\{\s*sala\s*\}/gi, valor: (d) => d.sala },
-  { variavel: '{acao}', descricao: '"designada" ou "redesignada" ("mantida" na audiência que já estava na pauta e não muda; "cancelada" no "×" da Pauta)', padrao: /\{\s*a[cç][aã]o\s*\}/gi, valor: (d) => d.acao },
+  { variavel: '{acao}', descricao: '"designada" ou "redesignada" ("mantida" na audiência que já estava na pauta e não muda; "cancelada" ao cancelar pela Pauta)', padrao: /\{\s*a[cç][aã]o\s*\}/gi, valor: (d) => d.acao },
   {
     variavel: '{eu}',
     descricao: 'seu nome, como está no PJe (também vale {usuario})',

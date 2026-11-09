@@ -234,10 +234,12 @@ async function moverTeclado(indice: number, passo: number) {
 .ordem { color: var(--cor-suave); font-variant-numeric: tabular-nums; text-align: right; }
 .dados { min-width: 0; }
 .linha-numero { display: flex; gap: 6px; align-items: center; }
-/* D61: o nome encolhe com "…"; "(+X)" e "(?)" nunca somem. */
+/* D61: o nome encolhe com "…"; "(+X)" e os advogados nunca somem. */
 .linha-parte { display: flex; gap: 4px; align-items: baseline; min-width: 0; font-size: 12px; }
 .nome-parte { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .linha-parte .ajuda { flex: none; }
+/* D100: o ícone de pessoa não tem linha de base; fica no meio da linha. */
+.linha-parte .ajuda-advogados { align-self: center; }
 .rotulo-intervalo { font-weight: 600; }
 .selo-mini { font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 999px; background: #e8f0fe; color: #1a56c4; white-space: nowrap; }
 .selo-mini.redesignar { background: var(--cor-aviso-fundo); color: var(--cor-aviso); cursor: help; }
