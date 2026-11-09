@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 // A Pauta (3.2) com um PJe falso e um IntersectionObserver falso (o teste diz quais dias estão
-// perto da tela): a leitura (entrega 1, D94) e o "+" e o "×" (entrega 2). Números de processo e
+// perto da tela): a leitura (entrega 1, D95) e o "+" e o "×" (entrega 2, D98). Números de processo e
 // nomes fictícios.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -87,30 +87,6 @@ function mesDaSala(idSala: string, ano: number, mes: number) {
   });
 }
 
-/** O `audpje/pautas` (D92b), na forma da prova técnica de 06/11/2026: sem partes, vagas nem 100% Digital. */
-const aud4 = (idProcesso: number, quando: string, idSala: number, nomeSala: string, classe: string) => ({
-  numeroProcesso: `00001${idProcesso}-52.2026.5.09.0001`,
-  idProcessoAudiencia: 8000 + idProcesso,
-  idProcesso,
-  classeJudicial: classe === 'ATOrd' ? 'Ação Trabalhista - Rito Ordinário' : 'Ação Trabalhista - Rito Sumaríssimo',
-  siglaClasseJudicial: classe,
-  idOrgaoJulgador: 174,
-  vara: 3603,
-  idTipoAudiencia: 3,
-  tipoAudiencia: 'Conciliação em Conhecimento',
-  dataAudiencia: quando,
-  anoProcesso: 2026,
-  valorCausa: 1000,
-  idSala,
-  nomeSala,
-});
-const AUD4 = [
-  aud4(11, `${D1}T09:00:00`, 503, 'Sala 01 Cejusc-CSC', 'ATSum'),
-  aud4(12, `${D1}T08:30:00`, 504, 'Sala 02 Cejusc-CSC', 'ATOrd'),
-  aud4(13, `${D2}T14:00:00`, 503, 'Sala 01 Cejusc-CSC', 'ATOrd'),
-  aud4(16, '2026-11-15T10:00:00', 504, 'Sala 02 Cejusc-CSC', 'ATOrd'),
-];
-
 // O "+" (D89d). Números fictícios com o dígito verificador certo: o 101 não tem audiência, o 102 já
 // tem uma no órgão (vira redesignação, D32) e o 109 tramita na 1ª VT (D27).
 const N101 = '0000101-52.2026.5.09.0001';
@@ -159,12 +135,6 @@ async function responder(url: string, init?: RequestInit): Promise<Response> {
       return json([174, 77, 49, 63, 50, 174].map((id) => ({ idOrgaoJulgador: id })));
     }
     if (u.pathname.endsWith('/audpje/oj')) return json(TRIBUNAL);
-    if (u.pathname.endsWith('/audpje/pautas')) {
-      const de = u.searchParams.get('dataInicio') ?? '';
-      const ate = u.searchParams.get('dataFim') ?? '';
-      const oj = Number(u.searchParams.get('orgaoJulgador'));
-      return json(AUD4.filter((a) => a.idOrgaoJulgador === oj && a.dataAudiencia.slice(0, 10) >= de && a.dataAudiencia.slice(0, 10) <= ate));
-    }
     if (u.pathname.endsWith('/salasaudiencias')) return json(SALAS[Number(u.searchParams.get('idOrgaoJulgador'))] ?? []);
     if (u.pathname.endsWith('/calendarioeventos')) {
       return json([{ id: 1, descricao: 'Feriado municipal', dataInicio: D3, dataFim: D3, feriado: true, suspendeAudiencia: true }]);
@@ -356,37 +326,23 @@ describe('Pauta (3.2, entrega 1)', () => {
     expect(leiturasDoDia().some((l) => l.includes('idSalaAudiencia=162'))).toBe(true);
   });
 
-  it('"Todas as salas" (D92b): o órgão inteiro pelo AUD4, um mês por consulta, sem partes nem vagas', async () => {
+  it('"Todas as salas" (D95): a pauta de cada sala, junta pela hora, com vagas, partes e a sala em cada linha', async () => {
     const { raiz, mostrar, escolher, dia, opcoesDe } = await abrir();
-    const detalhes = async () => {
-      const campo = raiz.querySelector<HTMLInputElement>('#pauta-sala')!;
-      campo.dispatchEvent(new Event('focus'));
-      await nextTick();
-      const d = [...raiz.querySelectorAll('#pauta-sala-lista .detalhe-opcao')].map((x) => x.textContent);
-      campo.dispatchEvent(new Event('blur'));
-      return d;
-    };
     expect(await opcoesDe('pauta-sala')).toEqual(['Sala 01 Cejusc-CSC', 'Sala 02 Cejusc-CSC', 'Todas as salas']);
-    expect(await detalhes()).toEqual(['visão geral, sem partes nem vagas']);
-    await mostrar([D1, D2]);
-    await vi.waitFor(() => expect(leiturasDoDia()).toHaveLength(2));
+    await mostrar([D1, '2026-11-12']);
     await escolher('pauta-sala', 'todas');
-    await vi.waitFor(() => expect(dia(D1).textContent).toContain('2 audiências'));
-    expect(dia(D1).textContent).not.toContain('vaga');
+    await vi.waitFor(() => expect(dia(D1).textContent).toContain('2 audiências · 1 vaga livre'));
     const linhas = [...dia(D1).querySelectorAll('tr')].map((tr) => tr.textContent ?? '');
-    expect(linhas).toHaveLength(2);
-    expect(linhas[0]).toMatch(/08:30.*Sala 02 Cejusc-CSC.*0000112-52.*ATOrd.*Conciliação em Conhecimento/);
-    expect(linhas[1]).toMatch(/09:00.*Sala 01 Cejusc-CSC.*0000111-52.*ATSum/);
-    // Sem partes e sem "(?)": o AUD4 não diz se o processo é segredo de justiça.
-    expect(dia(D1).querySelector('.botao-ajuda')).toBeNull();
-    expect(dia(D1).textContent).not.toContain('AUTOR');
-    // Uma consulta para o mês inteiro, de hoje ao fim do mês, e nenhuma pauta do dia a mais.
-    expect(lidos.filter((l) => l.includes('/audpje/pautas')).at(-1)).toBe('/audapi/rest/pje/audpje/pautas?dataInicio=2026-11-09&dataFim=2026-11-30&orgaoJulgador=174');
-    expect(leiturasDoDia()).toHaveLength(2);
-    // O domingo com audiência aparece; o dia sem nada diz que não há audiência em nenhuma sala.
-    await vi.waitFor(() => expect(raiz.querySelector('[data-dia="2026-11-15"]')).not.toBeNull());
-    await mostrar(['2026-11-12']);
-    await vi.waitFor(() => expect(dia('2026-11-12').textContent).toContain('Não há audiências neste dia em nenhuma sala'));
+    expect(linhas).toHaveLength(3);
+    expect(linhas[0]).toMatch(/08:30.*Sala 02 Cejusc-CSC.*AUTOR 12/);
+    expect(linhas[1]).toMatch(/09:00.*Sala 01 Cejusc-CSC.*AUTOR 11.*100% Digital/);
+    expect(linhas[2]).toMatch(/09:10.*Sala 01 Cejusc-CSC.*Vaga livre/);
+    // D96, D97: o "(?)" dos advogados, como na sala; sem "Carregar partes" e sem o AUD4.
+    expect(dia(D1).querySelector('.botao-ajuda')).not.toBeNull();
+    expect(raiz.textContent).not.toContain('Carregar partes');
+    expect(lidos.some((l) => l.includes('/audpje/pautas'))).toBe(false);
+    expect(leiturasDoDia().filter((l) => l.endsWith(D1)).map((l) => /idSalaAudiencia=(\d+)/.exec(l)![1]).sort()).toEqual(['503', '504']);
+    await vi.waitFor(() => expect(dia('2026-11-12').textContent).toContain('Não há audiências nem vagas configuradas em nenhuma sala neste dia'));
   });
 
   it('os advogados só são lidos quando pedidos, no "(?)" (D61, D92)', async () => {
@@ -536,52 +492,6 @@ describe('o mês da sala (D92, prova técnica de 06/11/2026)', () => {
   });
 });
 
-describe('"Carregar partes" em "Todas as salas" (D94)', () => {
-  const lidasDoProcesso = () => lidos.filter((l) => /\/processos\/id\/\d+(\/partes)?$/.test(l));
-
-  async function todas() {
-    const t = await abrir();
-    await t.mostrar([D1]);
-    await t.escolher('pauta-sala', 'todas');
-    await vi.waitFor(() => expect(t.dia(D1).textContent).toContain('2 audiências'));
-    const linha = (n: number) => [...t.dia(D1).querySelectorAll('tr')].find((tr) => tr.textContent?.includes(`00001${n}-52`))!;
-    const botao = (el: ParentNode, texto: string) => [...el.querySelectorAll('button')].find((b) => b.textContent?.trim() === texto);
-    return { ...t, linha, botao };
-  }
-
-  it('na linha: lê o processo e as partes só daquela audiência, com os advogados no "(?)" e o 100% Digital', async () => {
-    const { linha, botao } = await todas();
-    expect(lidasDoProcesso()).toEqual([]);
-    botao(linha(11), 'Carregar partes')!.click();
-    await vi.waitFor(() => expect(linha(11).textContent).toContain('ANA EXEMPLO (+1) × EMPRESA MODELO LTDA (+1)'));
-    expect(lidasDoProcesso()).toEqual(['/pje-comum-api/api/processos/id/11', '/pje-comum-api/api/processos/id/11/partes']);
-    expect(linha(11).textContent).toContain('100% Digital');
-    expect(linha(11).querySelector('.botao-ajuda')!.getAttribute('title')).toMatch(/ADVOGAD/);
-    // A outra linha continua com o botão, sem consulta.
-    expect(botao(linha(12), 'Carregar partes')).toBeDefined();
-  });
-
-  it('no dia: carrega todas; o processo em segredo de justiça não tem as partes lidas', async () => {
-    const { dia, linha, botao } = await todas();
-    const doDia = botao(dia(D1).querySelector('.cab-dia')!, 'Carregar partes')!;
-    expect(doDia.disabled).toBe(false);
-    doDia.click();
-    await vi.waitFor(() => expect(linha(12).textContent).toContain('Segredo de justiça'));
-    await vi.waitFor(() => expect(linha(11).textContent).toContain('ANA EXEMPLO (+1) × EMPRESA MODELO LTDA (+1)'));
-    expect(lidasDoProcesso()).toContain('/pje-comum-api/api/processos/id/12');
-    expect(lidasDoProcesso()).not.toContain('/pje-comum-api/api/processos/id/12/partes');
-    expect(linha(12).querySelector('.botao-ajuda')).toBeNull();
-    await vi.waitFor(() => expect(doDia.disabled).toBe(true));
-  });
-
-  it('na sala, não há "Carregar partes": a pauta do dia já traz as partes', async () => {
-    const { mostrar, dia } = await abrir();
-    await mostrar([D1]);
-    await vi.waitFor(() => expect(dia(D1).textContent).toContain('AUTOR 11'));
-    expect([...dia(D1).querySelectorAll('button')].some((b) => b.textContent?.includes('Carregar partes'))).toBe(false);
-  });
-});
-
 describe('o "+" e o "×" no órgão logado (entrega 2, D89b–D89e)', () => {
   // O formulário do Individual olha a data de hoje: fixa em 06/11/2026, antes dos dias da pauta.
   beforeEach(() => {
@@ -718,16 +628,38 @@ describe('o "+" e o "×" no órgão logado (entrega 2, D89b–D89e)', () => {
     expect(x.title).toContain('tramita em outro órgão');
   });
 
-  it('em outro órgão e em "Todas as salas": sem "+" nem "×"', async () => {
+  it('em outro órgão: sem "+" nem "×", só leitura', async () => {
     const { raiz, mostrar, escolher, dia, texto } = await abrir();
     await mostrar([D1]);
     await escolher('pauta-orgao', '1 vtcsv');
     await vi.waitFor(() => expect(dia(D1).textContent).toContain('AUTOR 21'));
     expect(texto()).toContain('só leitura: nada é gravado no PJe');
     expect(raiz.querySelector('.botao-mais-dia, .botao-mais, .botao-cancelar')).toBeNull();
-    await escolher('pauta-orgao', 'cejusc');
+  });
+
+  it('em "Todas as salas" (D98): o "+" da vaga e o "×" usam a sala da linha; o "+ Designar" do dia deixa escolher a sala', async () => {
+    const { raiz, mostrar, escolher, dia } = await abrir();
+    await mostrar([D1]);
     await escolher('pauta-sala', 'todas');
-    await vi.waitFor(() => expect(dia(D1).textContent).toContain('2 audiências'));
-    expect(raiz.querySelector('.botao-mais-dia, .botao-mais, .botao-cancelar')).toBeNull();
+    await vi.waitFor(() => expect(dia(D1).textContent).toContain('2 audiências · 1 vaga livre'));
+    dia(D1).querySelector<HTMLButtonElement>('.botao-mais')!.click();
+    await nextTick();
+    expect(janela(raiz).textContent).toContain('Designar · seg, 09/11 · Sala 01 Cejusc-CSC · 09:10');
+    janela(raiz).querySelector<HTMLButtonElement>('.fechar')!.click();
+    await nextTick();
+    const linha12 = [...dia(D1).querySelectorAll('tr')].find((tr) => tr.textContent?.includes('AUTOR 12'))!;
+    linha12.querySelector<HTMLButtonElement>('.botao-cancelar')!.click();
+    await nextTick();
+    expect(janela(raiz).textContent).toContain('Cancelar audiência · seg, 09/11 · Sala 02 Cejusc-CSC · 08:30');
+    janela(raiz).querySelector<HTMLButtonElement>('.fechar')!.click();
+    await nextTick();
+    botoes(dia(D1), /^\+ Designar$/)[0]!.click();
+    await nextTick();
+    expect(janela(raiz).textContent).toContain('Designar · seg, 09/11 · escolha a sala no formulário');
+    await buscarProcesso(raiz, N101);
+    await vi.waitFor(() => expect(janela(raiz).querySelector('.grade select')).not.toBeNull());
+    const sala = janela(raiz).querySelector<HTMLSelectElement>('.grade select')!;
+    expect(sala.disabled).toBe(false);
+    expect([...sala.options].map((o) => o.textContent)).toEqual(['Sala 01 Cejusc-CSC', 'Sala 02 Cejusc-CSC']);
   });
 });

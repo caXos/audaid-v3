@@ -17,9 +17,12 @@ import { useEnvio, type DadosDoEnvio } from './envio';
 const DATA = /^\d{4}-\d{2}-\d{2}$/;
 const HORA = /^\d{2}:\d{2}$/;
 
-/** O "+" da Pauta (D89d): sala e dia fixos; a hora, fixa no "+" da vaga e livre no "+" do dia. */
+/**
+ * O "+" da Pauta (D89d): dia fixo; a sala, fixa, menos no "+ Designar" do dia em "Todas as salas"
+ * (D98), onde é escolhida aqui; a hora, fixa no "+" da vaga e livre no "+" do dia.
+ */
 export interface FixosFormulario {
-  idSala: number;
+  idSala?: number;
   /** AAAA-MM-DD */
   data: string;
   /** HH:MM */
@@ -179,7 +182,7 @@ export function useFormulario(ambiente: Ambiente, d: Dados, opcoes: Opcoes, simu
     idProcesso: d.processo.id,
     redesignacao: Boolean(d.antiga),
     /** O que veio fixo da Pauta e não se muda aqui (D89d). */
-    salaFixa: Boolean(fixos),
+    salaFixa: fixos?.idSala !== undefined,
     dataFixa: Boolean(fixos),
     horaFixa: Boolean(fixos?.hora),
     salaId,

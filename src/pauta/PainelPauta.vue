@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // A Pauta (3.2, §2.7): filtros no topo (D90), lista contínua a partir de hoje (D91) e a pauta de
-// cada dia lida quando ele chega perto da tela (D92). No órgão logado, numa sala, o "+" designa e o
-// "×" cancela, uma audiência por vez (D89b–D89e); nos outros órgãos e em "Todas as salas", só leitura.
+// cada dia lida quando ele chega perto da tela (D92); "Todas as salas" junta a pauta de cada sala
+// (D95). No órgão logado, o "+" designa e o "×" cancela, uma audiência por vez (D89b–D89e), também
+// em "Todas as salas" (D98); nos outros órgãos, só leitura.
 import { computed, onMounted, onUnmounted, ref, shallowRef } from 'vue';
 import CampoBusca from '../componentes/CampoBusca.vue';
 import type { OpcaoBusca } from '../componentes/opcaoBusca';
@@ -9,10 +10,8 @@ import type { Opcoes, OrgaoConhecido } from '../config/opcoes';
 import type { Armazenamento } from '../ext/api';
 import { ESCRITA_LIBERADA } from '../fluxo/executor';
 import type { Ambiente } from '../pje/ambiente';
-import { resumoPolo } from '../lote/apresentacao';
-import type { Parte } from '../regras/partes';
 import CancelarPauta from './CancelarPauta.vue';
-import type { LeitorPauta, PartesDaAudiencia } from './dados';
+import type { LeitorPauta } from './dados';
 import DesignarPauta from './DesignarPauta.vue';
 import DiagnosticoPauta from './DiagnosticoPauta.vue';
 import { usePauta, type EstadoDia, type FocoPauta, type LinhaPauta } from './estadoPauta';
@@ -47,10 +46,18 @@ const lista = ref<HTMLElement | null>(null);
 // ── O "+" e o "×" (D89b–D89e) ─────────────────────────────────────────────────────────────────
 /** Como no Individual: o modo simulação das Opções, ou a escrita travada no código (D39). */
 const simulando = props.opcoes.simulacao || !ESCRITA_LIBERADA;
+type Sala = { id: number; nome: string };
 type Acao =
-  | { tipo: 'designar'; sala: { id: number; nome: string }; dia: string; hora?: string }
-  | { tipo: 'cancelar'; sala: { id: number; nome: string }; dia: string; linha: LinhaPauta };
+  /** Sem `sala`: o "+ Designar" do dia em "Todas as salas"; a sala se escolhe no formulário (D98). */
+  | { tipo: 'designar'; sala?: Sala; dia: string; hora?: string }
+  | { tipo: 'cancelar'; sala: Sala; dia: string; linha: LinhaPauta };
 const acao = shallowRef<Acao | null>(null);
+
+/** A sala de uma linha: a escolhida ou, em "Todas as salas", a da própria linha (D98). */
+function salaDaLinha(l?: LinhaPauta): Sala | undefined {
+  if (l?.idSala !== undefined) return p.orgao()?.salas.find((s) => s.id === l.idSala);
+  return p.salaEscolhida();
+}
 
 /** O que o cabeçalho diz do órgão escolhido: só leitura, simulação ou envio real. */
 const textoModo = computed(() => {
@@ -66,14 +73,17 @@ function motivoSemCancelar(l: LinhaPauta): string | null {
   return null;
 }
 
-function abrirDesignar(dia: string, hora?: string) {
-  const sala = p.salaEscolhida();
-  if (!sala || p.diaBloqueado(dia)) return;
-  acao.value = { tipo: 'designar', sala, dia, ...(hora ? { hora } : {}) };
+/** O "+": da vaga (com a linha, a sala e a hora dela) ou do dia (sem linha). */
+function abrirDesignar(dia: string, linha?: LinhaPauta) {
+  if (p.diaBloqueado(dia)) return;
+  const sala = salaDaLinha(linha);
+  // Fora de "Todas as salas", a sala é sempre conhecida; dentro, só a vaga a traz.
+  if (!sala && e.sala !== 'todas') return;
+  acao.value = { tipo: 'designar', dia, ...(sala ? { sala } : {}), ...(linha ? { hora: linha.hora } : {}) };
 }
 
 function abrirCancelar(dia: string, linha: LinhaPauta) {
-  const sala = p.salaEscolhida();
+  const sala = salaDaLinha(linha);
   if (!sala || motivoSemCancelar(linha)) return;
   acao.value = { tipo: 'cancelar', sala, dia, linha };
 }
@@ -81,7 +91,9 @@ function abrirCancelar(dia: string, linha: LinhaPauta) {
 /** Gravou de verdade: relê o dia e, na redesignação, o dia de onde a audiência saiu (D89d). */
 function gravou(deOnde?: { idSala: number; dia: string }) {
   const a = acao.value;
-  if (a) p.relerDia(a.sala.id, a.dia);
+  if (a?.sala) p.relerDia(a.sala.id, a.dia);
+  // A sala foi escolhida no formulário (D98): relê o dia em todas.
+  else if (a) p.relerDiaEmTodas(a.dia);
   if (deOnde) p.relerDia(deOnde.idSala, deOnde.dia);
 }
 
@@ -91,8 +103,8 @@ const opcoesSala = computed<OpcaoBusca[]>(() => {
   const o = p.orgao();
   if (!o) return [];
   const salas = o.salas.map((s) => ({ valor: String(s.id), rotulo: s.nome }));
-  // D92b: a visão geral do órgão, pelo AUD4; o detalhe diz o que ela não traz, sem faixa nova na tela.
-  return o.salas.length > 1 ? [...salas, { valor: 'todas', rotulo: 'Todas as salas', detalhe: 'visão geral, sem partes nem vagas' }] : salas;
+  // D95: a pauta de cada sala, junta pela hora.
+  return o.salas.length > 1 ? [...salas, { valor: 'todas', rotulo: 'Todas as salas', detalhe: 'a pauta de cada sala, junta' }] : salas;
 });
 const opcoesMes = computed<OpcaoBusca[]>(() => e.meses.map((m) => ({ valor: m.chave, rotulo: m.rotulo })));
 
@@ -189,11 +201,8 @@ function resumoDoDia(d: EstadoDia): string {
   if (d.estado === 'erro') return 'erro ao consultar';
   const aud = d.linhas.filter((l) => l.tipo === 'audiencia').length;
   const vagas = d.linhas.length - aud;
-  const audiencias = `${aud} audiência${aud === 1 ? '' : 's'}`;
-  // "Todas as salas" (D92b): o AUD4 não traz as vagas, então só conta as audiências.
-  if (todasAsSalas.value) return aud ? audiencias : 'sem audiências';
   if (!d.linhas.length) return 'sem pauta';
-  return `${audiencias} · ${vagas} vaga${vagas === 1 ? '' : 's'} livre${vagas === 1 ? '' : 's'}`;
+  return `${aud} audiência${aud === 1 ? '' : 's'} · ${vagas} vaga${vagas === 1 ? '' : 's'} livre${vagas === 1 ? '' : 's'}`;
 }
 
 function textoAviso(dia: string, d: EstadoDia): { classe: string; texto: string } | null {
@@ -214,26 +223,6 @@ function dicaAdvogados(idProcesso?: number): string {
   if (idProcesso === undefined) return '';
   if (!e.advogados.has(idProcesso)) return 'Advogados: passe o mouse ou clique para consultar';
   return e.advogados.get(idProcesso) ?? 'Consultando os advogados…';
-}
-
-/** D94: "AUTOR (+1) × RÉU (+2)", como a linha do Lote (D61). */
-function resumoDasPartes(d: PartesDaAudiencia): string {
-  const polo = (partes: Parte[]) => {
-    const r = resumoPolo(partes);
-    return r.mais ? `${r.nome} (+${r.mais})` : r.nome;
-  };
-  return `${polo(d.autores)} × ${polo(d.reus)}`;
-}
-
-/** O "Carregar partes" do dia fica desabilitado quando todas as audiências já foram pedidas. */
-const partesDoDiaPedidas = (d: EstadoDia) =>
-  d.linhas.every((l) => l.idProcesso === undefined || (e.partes.has(l.idProcesso) && e.partes.get(l.idProcesso)!.estado !== 'erro'));
-
-/** O 100% Digital: da pauta da sala ou, em "Todas as salas", das partes carregadas (D94). */
-function ehDigital(l: LinhaPauta): boolean {
-  if (l.processo?.juizoDigital) return true;
-  const pa = l.idProcesso === undefined ? undefined : e.partes.get(l.idProcesso);
-  return pa?.estado === 'ok' && pa.dados.juizoDigital;
 }
 
 const urlProcesso = (id?: number) => (id === undefined ? undefined : `${props.ambiente.origem}/pjekz/processo/${id}/detalhe`);
@@ -309,21 +298,16 @@ const ehDestaque = (dia: string, l: LinhaPauta) =>
                     class="acao secundaria pequena botao-mais-dia"
                     type="button"
                     :disabled="Boolean(p.diaBloqueado(dia))"
-                    :title="p.diaBloqueado(dia) ? `Dia bloqueado: ${p.diaBloqueado(dia)}` : 'Designar neste dia, com o horário de início'"
+                    :title="
+                      p.diaBloqueado(dia)
+                        ? `Dia bloqueado: ${p.diaBloqueado(dia)}`
+                        : todasAsSalas
+                          ? 'Designar neste dia, com a sala e o horário escolhidos no formulário'
+                          : 'Designar neste dia, com o horário de início'
+                    "
                     @click="abrirDesignar(dia)"
                   >
                     + Designar
-                  </button>
-                  <!-- D94: em "Todas as salas", as partes e os advogados de todas as audiências do dia. -->
-                  <button
-                    v-if="todasAsSalas && d.estado === 'ok' && d.linhas.length"
-                    class="acao secundaria pequena botao-partes-dia"
-                    type="button"
-                    :disabled="partesDoDiaPedidas(d)"
-                    title="Carrega as partes e os advogados de todas as audiências deste dia"
-                    @click="p.pedirPartesDoDia(dia)"
-                  >
-                    Carregar partes
                   </button>
                 </header>
                 <div v-if="d.estado === 'espera' || d.estado === 'carregando'" class="esqueleto" aria-hidden="true">
@@ -334,7 +318,7 @@ const ehDestaque = (dia: string, l: LinhaPauta) =>
                   <button class="acao secundaria pequena" type="button" @click="p.tentarDeNovo(dia)">Tentar de novo</button>
                 </div>
                 <p v-else-if="!d.linhas.length" class="vazio-dia suave">
-                  {{ todasAsSalas ? 'Não há audiências neste dia em nenhuma sala' : 'Não há audiências nem vagas configuradas para esta sala neste dia' }}
+                  {{ todasAsSalas ? 'Não há audiências nem vagas configuradas em nenhuma sala neste dia' : 'Não há audiências nem vagas configuradas para esta sala neste dia' }}
                 </p>
                 <template v-else>
                   <p v-if="d.erro" class="aviso-texto vazio-dia">{{ d.erro }}</p>
@@ -359,7 +343,7 @@ const ehDestaque = (dia: string, l: LinhaPauta) =>
                           :disabled="Boolean(p.diaBloqueado(dia))"
                           :title="p.diaBloqueado(dia) ? `Dia bloqueado: ${p.diaBloqueado(dia)}` : `Designar nesta vaga, às ${l.hora}`"
                           :aria-label="`Designar nesta vaga, às ${l.hora}`"
-                          @click="abrirDesignar(dia, l.hora)"
+                          @click="abrirDesignar(dia, l)"
                         >
                           +
                         </button>
@@ -368,34 +352,7 @@ const ehDestaque = (dia: string, l: LinhaPauta) =>
                         <td class="numero">
                           <a :href="urlProcesso(l.idProcesso)" target="_blank" rel="noopener noreferrer" title="Abrir o processo numa aba nova">{{ l.nrProcesso ?? l.idProcesso }}</a>
                         </td>
-                        <!-- "Todas as salas" (D92b): o AUD4 não traz partes nem segredo de justiça. Elas vêm a pedido (D94). -->
-                        <td v-if="todasAsSalas" class="classe-linha">{{ l.processo?.classeSigla ?? '' }}</td>
-                        <td v-if="todasAsSalas" class="partes-linha">
-                          <template v-for="pa in [l.idProcesso === undefined ? undefined : e.partes.get(l.idProcesso)]" :key="l.idProcesso">
-                            <template v-if="pa?.estado === 'ok'">
-                              <template v-if="pa.dados.segredo">Segredo de justiça</template>
-                              <template v-else>
-                                {{ resumoDasPartes(pa.dados) }}
-                                <button class="ajuda botao-ajuda" type="button" :title="dicaAdvogados(l.idProcesso)" :aria-label="dicaAdvogados(l.idProcesso)">(?)</button>
-                              </template>
-                            </template>
-                            <span v-else-if="pa?.estado === 'carregando'" class="suave">Carregando as partes…</span>
-                            <template v-else-if="pa?.estado === 'erro'">
-                              <span class="erro-texto">Erro: {{ pa.erro }}</span>
-                              <button class="acao secundaria pequena" type="button" @click="p.pedirPartes(l.idProcesso!)">Tentar de novo</button>
-                            </template>
-                            <button
-                              v-else-if="l.idProcesso !== undefined"
-                              class="acao secundaria pequena"
-                              type="button"
-                              title="Carrega as partes e os advogados só desta audiência"
-                              @click="p.pedirPartes(l.idProcesso!)"
-                            >
-                              Carregar partes
-                            </button>
-                          </template>
-                        </td>
-                        <td v-else class="partes-linha">
+                        <td class="partes-linha">
                           {{ partes(l) }}
                           <button
                             v-if="l.idProcesso !== undefined && !l.segredo"
@@ -412,7 +369,7 @@ const ehDestaque = (dia: string, l: LinhaPauta) =>
                         </td>
                         <td class="tipo-linha">
                           {{ l.descricaoTipo ?? '—' }}
-                          <span v-if="ehDigital(l)" class="selo-digital">100% Digital</span>
+                          <span v-if="l.processo?.juizoDigital" class="selo-digital">100% Digital</span>
                         </td>
                         <!-- D89e: o "×" cancela; desabilitado, com o motivo, quando não dá. -->
                         <td v-if="p.podeGravar()" class="acoes-linha">
@@ -513,8 +470,7 @@ const ehDestaque = (dia: string, l: LinhaPauta) =>
 .tabela-pauta .numero a { color: var(--cor-marca); text-decoration: none; font-variant-numeric: tabular-nums; }
 .tabela-pauta .numero a:hover { text-decoration: underline; }
 .tabela-pauta .tipo-linha { width: 34%; }
-.tabela-pauta .classe-linha { width: 70px; color: var(--cor-suave); }
-.botao-partes-dia, .botao-mais-dia { margin-left: 10px; }
+.botao-mais-dia { margin-left: 10px; }
 .tabela-pauta .acoes-linha { width: 40px; text-align: right; }
 .botao-mais, .botao-cancelar { min-width: 28px; font-weight: 700; }
 .botao-cancelar:not(:disabled) { color: var(--cor-erro); border-color: #e3a29c; }

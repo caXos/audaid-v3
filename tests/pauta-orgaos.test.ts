@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { normalizarOpcoes, opcoesPadrao } from '../src/config/opcoes';
 import type { Audiencia } from '../src/pje/api';
-import type { Resposta } from '../src/pje/http';
-import { carregarAudienciasDoOrgao, type LeitorPauta } from '../src/pauta/dados';
 import { focoDoProcesso } from '../src/pauta/estadoPauta';
 import { FilaDeLeitura } from '../src/pauta/fila';
 import {
@@ -172,29 +170,5 @@ describe('Opções da Pauta', () => {
     );
     expect(o.pauta).toEqual({ mesesAFrente: 12, ocultos: [49, 59], orgaos: [{ id: 49, rotulo: '1 VTCSV · 0071', nome: '01ª VARA' }] });
     expect(normalizarOpcoes({ pauta: { mesesAFrente: 0 } }, false).pauta.mesesAFrente).toBe(1);
-  });
-});
-
-describe('"Todas as salas" pelo AUD4 (D92b)', () => {
-  it('agrupa por dia, ordena por hora e sala, e aguenta item sem data ou sem hora', async () => {
-    const itens = [
-      { numeroProcesso: 'N2', idProcesso: 2, siglaClasseJudicial: 'ATOrd', tipoAudiencia: 'Instrução', dataAudiencia: '2026-11-10T10:00:00', idSala: 504, nomeSala: 'Sala 02' },
-      { numeroProcesso: 'N1', idProcesso: 1, siglaClasseJudicial: 'ATSum', tipoAudiencia: 'Conciliação', dataAudiencia: '2026-11-10T10:00:00', idSala: 503, nomeSala: 'Sala 01' },
-      { numeroProcesso: 'N3', idProcesso: 3, tipoAudiencia: 'Inicial', dataAudiencia: '2026-11-10T08:00:00', idSala: 503 },
-      { numeroProcesso: 'N4', idProcesso: 4, dataAudiencia: '2026-11-11', idSala: 503, nomeSala: 'Sala 01' },
-      { numeroProcesso: 'sem data', idProcesso: 5 },
-      'lixo',
-    ];
-    const ler: LeitorPauta = async <T>() => ({ ok: true as const, status: 200, ms: 1, via: 'fetch' as const, dados: itens as T });
-    const porDia = await carregarAudienciasDoOrgao(ler, 174, '2026-11-09', '2026-11-30');
-    expect([...porDia.keys()]).toEqual(['2026-11-10', '2026-11-11']);
-    expect(porDia.get('2026-11-10')!.map((l) => `${l.hora} ${l.sala} ${l.nrProcesso}`)).toEqual(['08:00 Sala 503 N3', '10:00 Sala 01 N1', '10:00 Sala 02 N2']);
-    expect(porDia.get('2026-11-10')![1]).toMatchObject({ tipo: 'audiencia', idProcesso: 1, descricaoTipo: 'Conciliação', processo: { classeSigla: 'ATSum' } });
-    expect(porDia.get('2026-11-11')![0]!.hora).toBe('--:--');
-  });
-
-  it('erro do AUD4 vira erro do mês', async () => {
-    const ler: LeitorPauta = async <T>(): Promise<Resposta<T>> => ({ ok: false, status: 500, ms: 1, via: 'fetch', erro: { mensagem: 'HTTP 500' } });
-    await expect(carregarAudienciasDoOrgao(ler, 174, '2026-11-09', '2026-11-30')).rejects.toThrow('HTTP 500');
   });
 });

@@ -20,7 +20,8 @@ const props = defineProps<{
   opcoes: Opcoes;
   simulando: boolean;
   idOrgaoLogado: number;
-  sala: { id: number; nome: string };
+  /** A sala da vaga ou da sala escolhida. Sem ela ("+ Designar" do dia em "Todas as salas", D98), escolhe-se no formulário. */
+  sala?: { id: number; nome: string };
   /** AAAA-MM-DD */
   dia: string;
   /** HH:MM: o "+" da vaga. Sem ela, o "+" do dia, com a hora digitada. */
@@ -36,8 +37,10 @@ const motivo = ref('');
 const dados = shallowRef<Dados | null>(null);
 const ler = leitorDoPje(props.ambiente);
 
-const titulo = computed(() => `Designar · ${rotuloDoDia(props.dia)} · ${props.sala.nome}${props.hora ? ` · ${props.hora}` : ''}`);
-const fixos = computed(() => ({ idSala: props.sala.id, data: props.dia, ...(props.hora ? { hora: props.hora } : {}) }));
+const titulo = computed(
+  () => `Designar · ${rotuloDoDia(props.dia)} · ${props.sala ? props.sala.nome : 'escolha a sala no formulário'}${props.hora ? ` · ${props.hora}` : ''}`,
+);
+const fixos = computed(() => ({ data: props.dia, ...(props.sala ? { idSala: props.sala.id } : {}), ...(props.hora ? { hora: props.hora } : {}) }));
 
 /** D89d: o processo que já tem audiência no órgão é redesignado, e isso é dito antes de gravar. */
 const avisoRedesignacao = computed(() => {
