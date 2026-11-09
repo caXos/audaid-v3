@@ -124,11 +124,12 @@ export const SUGESTOES_MAXIMAS = 8;
  * D99: as sugestões do campo do número, pela busca do painel do PJe. Forma confirmada pelo usuário
  * em 09/11/2026: `[{ idAgrupamentoProcesso, idProcesso, numeroProcessoCompleto }]`, e `[]` quando
  * nada começa assim. O mesmo processo pode vir em mais de um agrupamento: aparece uma vez só. Só
- * ficam os que começam com o que foi digitado. Erro vira lista vazia: sugestão nunca atrapalha.
+ * ficam os que começam com o que foi digitado. `[]` = o PJe não achou nenhum; `null` = erro ou
+ * resposta que não é lista. O campo avisa os dois casos, cada um com a sua frase (D101).
  */
-export async function sugerirNumeros(ler: LeitorPauta, prefixo: string): Promise<string[]> {
+export async function sugerirNumeros(ler: LeitorPauta, prefixo: string): Promise<string[] | null> {
   const r = await ler<unknown>(caminhos.processosPorPrefixo(prefixo));
-  if (!r.ok || !Array.isArray(r.dados)) return [];
+  if (!r.ok || !Array.isArray(r.dados)) return null;
   const numeros = r.dados
     .map((item) => (ehObjeto(item) ? extrairNumeros(String(item['numeroProcessoCompleto'] ?? ''))[0] : undefined))
     .filter((n): n is string => n !== undefined && n.startsWith(prefixo));

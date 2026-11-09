@@ -69,11 +69,15 @@ describe('sugerirNumeros (D99)', () => {
     expect(await sugerirNumeros(leitor(r), '00001')).toEqual([N1, N2]);
   });
 
-  it('nada encontrado, resposta estranha ou erro: lista vazia', async () => {
+  it('nada encontrado: lista vazia (o campo diz que não achou, D101)', async () => {
     expect(await sugerirNumeros(leitor(ok([])), '0000101-')).toEqual([]);
-    expect(await sugerirNumeros(leitor(ok({ numeroProcessoCompleto: N1 })), '0000101-')).toEqual([]);
     expect(await sugerirNumeros(leitor(ok([{ idProcesso: 1 }, null, 'x'])), '0000101-')).toEqual([]);
-    expect(await sugerirNumeros(leitor({ ok: false, status: 500, ms: 1, via: 'fetch', erro: { mensagem: 'erro' } }), '0000101-')).toEqual([]);
+  });
+
+  it('erro ou resposta que não é lista: null (o campo diz que a consulta deu erro, D101)', async () => {
+    expect(await sugerirNumeros(leitor({ ok: false, status: 500, ms: 1, via: 'fetch', erro: { mensagem: 'erro' } }), '0000101-')).toBeNull();
+    expect(await sugerirNumeros(leitor(ok({ numeroProcessoCompleto: N1 })), '0000101-')).toBeNull();
+    expect(await sugerirNumeros(leitor(ok(null)), '0000101-')).toBeNull();
   });
 
   it(`no máximo ${SUGESTOES_MAXIMAS}`, async () => {

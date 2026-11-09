@@ -154,6 +154,8 @@ async function responder(url: string, init?: RequestInit): Promise<Response> {
     // em dois agrupamentos.
     if (u.pathname.endsWith('/agrupamentotarefas/processos')) {
       const prefixo = u.searchParams.get('numero') ?? '';
+      // D101: o "0000500-" faz a consulta dar erro.
+      if (prefixo.startsWith('0000500')) return new Response('', { status: 500 });
       const achados = Object.entries(NUMEROS).filter(([n]) => n.startsWith(prefixo));
       return json(achados.flatMap(([n, id]) => [8, ...(id === 101 ? [9] : [])].map((g) => ({ idAgrupamentoProcesso: g, idProcesso: id, numeroProcessoCompleto: n }))));
     }
@@ -591,6 +593,32 @@ describe('o "+" e o "×" no órgão logado (entrega 2, D89b–D89e)', () => {
     campo.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', cancelable: true }));
     await vi.waitFor(() => expect(janela(raiz).textContent).toContain('Designar audiência'));
     expect(campo.value).toBe(N101);
+    expect(janela(raiz).querySelector('.lista-sugestoes')).toBeNull();
+  });
+
+  it('D101: sem sugestão, a mesma lista diz por quê: nenhum processo, ou erro na consulta; o aviso não se escolhe', async () => {
+    const { raiz, dia } = await abrirComVaga();
+    dia(D1).querySelector<HTMLButtonElement>('.botao-mais')!.click();
+    await nextTick();
+    const campo = janela(raiz).querySelector<HTMLInputElement>('#designar-numero')!;
+    const avisoDaLista = () => janela(raiz).querySelector<HTMLElement>('.lista-sugestoes .aviso-sugestao');
+    await mudar(campo, '999-');
+    await vi.waitFor(() => expect(avisoDaLista()?.textContent?.trim()).toBe('Não foi encontrado nenhum processo com esse número'));
+    expect(avisoDaLista()!.classList.contains('erro')).toBe(false);
+    expect(avisoDaLista()!.getAttribute('aria-disabled')).toBe('true');
+    expect(campo.hasAttribute('aria-activedescendant')).toBe(false);
+    // Enter com o aviso não escolhe nada: segue para a busca, como sem lista.
+    const enter = new KeyboardEvent('keydown', { key: 'Enter', cancelable: true });
+    campo.dispatchEvent(enter);
+    expect(enter.defaultPrevented).toBe(false);
+    // Digitar de novo tira o aviso até a próxima resposta.
+    await mudar(campo, '500-');
+    expect(avisoDaLista()).toBeNull();
+    await vi.waitFor(() => expect(avisoDaLista()?.textContent?.trim()).toBe('Erro na consulta do número do processo'));
+    expect(avisoDaLista()!.classList.contains('erro')).toBe(true);
+    // Esc fecha.
+    campo.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', cancelable: true }));
+    await nextTick();
     expect(janela(raiz).querySelector('.lista-sugestoes')).toBeNull();
   });
 
