@@ -12,7 +12,7 @@
     <img src="icons/audaid.svg" alt="">
     <div>
       <h1>AudAid: termos de uso e privacidade</h1>
-      <p>Versão <span id="versao-termos">3</span> dos termos. Leia antes de usar.</p>
+      <p>Versão <span id="versao-termos">4</span> dos termos. Leia antes de usar.</p>
     </div>
   </header>
 
@@ -25,7 +25,8 @@
     </p>
     <p>
       Por isso, <strong>tudo o que o AudAid gravar fica registrado no seu nome</strong>: audiências
-      designadas ou redesignadas, atividades no GIGS e alterações do Juízo 100% Digital.
+      designadas, redesignadas ou canceladas, atividades no GIGS e alterações do Juízo 100% Digital.
+      As consultas também: para o PJe, cada leitura feita pelo AudAid é uma leitura sua.
     </p>
   </section>
 
@@ -35,11 +36,13 @@
       Ajuda assistentes de audiência a designar e redesignar audiências sem sair da tela do
       processo, e a evitar erros, como escolher o tipo errado entre os 27 tipos de audiência. O
       <strong>Controle em Lote</strong> monta a pauta de um dia inteiro a partir de uma lista de processos
-      e grava as audiências uma a uma, com um relatório de cada passo.
+      e grava as audiências uma a uma, com um relatório de cada passo. A <strong>Pauta</strong> mostra a
+      pauta das salas dos órgãos em que você tem perfil e, no órgão em que você está logado, permite
+      designar e cancelar audiências, uma por vez.
     </p>
     <ul>
       <li>Funciona <strong>só nas páginas do PJe dos TRTs</strong> (por exemplo,
-        <code>pje.trt9.jus.br</code>) e só no <strong>órgão julgador em que você está logado</strong>.</li>
+        <code>pje.trt9.jus.br</code>) e só grava no <strong>órgão julgador em que você está logado</strong>.</li>
       <li>Audiências de outros órgãos aparecem apenas para consulta: o AudAid nunca as altera.</li>
       <li>Datas em fim de semana, feriado ou suspensão de audiência são bloqueadas.</li>
       <li>O AudAid <strong>ajuda</strong>, mas não substitui a sua conferência.</li>
@@ -50,11 +53,19 @@
     <h2>O que o AudAid lê</h2>
     <p>As mesmas informações que o PJe mostra quando você abre as telas dele:</p>
     <ul>
-      <li>dados do processo (número, classe, fase, órgão julgador, Juízo 100% Digital);</li>
-      <li>no Controle em Lote, as <strong>partes e os advogados</strong> de cada processo, para mostrar e
-        ordenar a lista (os nomes não são guardados);</li>
+      <li>dados do processo (número, classe, fase, órgão julgador, Juízo 100% Digital, segredo de justiça);</li>
+      <li>no Controle em Lote e na Pauta, as <strong>partes e os advogados</strong> de cada processo, para
+        mostrar e ordenar a lista (os nomes não são guardados). Na Pauta, os advogados só são lidos quando
+        você os pede, no ícone de pessoa, e o processo em segredo de justiça aparece sem nomes;</li>
       <li>audiências do processo, salas e pauta do dia da sala (com as audiências que já estão nela),
         tipos de audiência;</li>
+      <li>na Pauta, os <strong>seus perfis</strong> no PJe, para saber em quais órgãos você atua, e a
+        <strong>pauta das salas</strong> desses órgãos: uma consulta por sala e dia, só quando o dia aparece na
+        tela, no máximo 4 ao mesmo tempo e sem atualização automática (só o botão "Atualizar" lê de novo);</li>
+      <li>no AUD4, que fica no mesmo endereço do PJe, a lista de órgãos do tribunal (nome e município), para
+        agrupar os seus órgãos por cidade;</li>
+      <li>ao digitar um número de processo na Pauta, a busca do próprio PJe pelos processos que começam com
+        ele, para sugerir o número completo;</li>
       <li>calendário de feriados e suspensões do órgão;</li>
       <li>do próprio token do PJe (não do eToken usado para assinar documentos): o <strong>órgão em que você
         está logado</strong> (para saber quais audiências serão manipuladas, sem interferir em audiências de
@@ -69,6 +80,8 @@
     <ul>
       <li>designação ou redesignação de audiência, inclusive de audiências que já estavam na pauta,
         quando você as altera no Controle em Lote;</li>
+      <li>na Pauta, a designação (ou redesignação) e o <strong>cancelamento</strong> de audiência, uma por
+        vez, só no órgão em que você está logado e sempre com confirmação;</li>
       <li>atividade no GIGS (opcional);</li>
       <li>retirada e recolocação do Juízo 100% Digital, apenas para designar audiência de Julgamento,
         que o PJe não permite em processo 100% Digital.</li>
@@ -84,10 +97,12 @@
       <li>Nunca são lidos ou guardados: sua senha, seu certificado digital ou dados das partes fora do
         que a tela em uso precisa.</li>
       <li>No seu navegador ficam guardados: as suas opções (posição do botão, sugestões de GIGS, regras
-        do Auto organizar), a data em que você aceitou estes termos e, no Controle em Lote, o
-        <strong>rascunho do lote</strong> (números de processo, horários, ajustes e textos de GIGS, sem nomes
-        de partes) e os últimos valores usados. O rascunho é apagado quando a gravação real começa.
-        Desinstalar a extensão apaga tudo.</li>
+        do Auto organizar, meses à frente e órgãos ocultos da Pauta), a data em que você aceitou estes
+        termos, no Controle em Lote, o <strong>rascunho do lote</strong> (números de processo, horários,
+        ajustes e textos de GIGS, sem nomes de partes) e os últimos valores usados, e, na Pauta, a lista
+        dos seus órgãos (número, sigla e nome, para as Opções) e a última sala escolhida em cada um. O
+        rascunho é apagado quando a gravação real começa. <strong>Nenhum nome de parte ou advogado fica
+        guardado.</strong> Desinstalar a extensão apaga tudo.</li>
     </ul>
     <p>Política de privacidade completa:
       <a href="https://caxos.github.io/audaid-v3/privacidade.html" target="_blank" rel="noopener">caxos.github.io/audaid-v3/privacidade.html</a>.</p>
