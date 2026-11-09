@@ -213,11 +213,23 @@ function textoAviso(dia: string, d: EstadoDia): { classe: string; texto: string 
   return { classe: 'erro-texto', texto: aud ? `${a.texto}: há ${aud} audiência(s), será necessário redesignar` : a.texto };
 }
 
-const polo = (x?: { nome: string; varios: boolean }) => (x ? `${x.nome}${x.varios ? ' (+)' : ''}` : '—');
-function partes(l: LinhaPauta): string {
-  if (l.segredo) return 'Segredo de justiça';
-  return `${polo(l.poloAtivo)} × ${polo(l.poloPassivo)}`;
+/** D99: o "(+)" depois do nome diz o que é, ao passar o mouse. */
+const DICA_MAIS_PARTES = 'Há mais partes neste polo. O (?) mostra todas, com os advogados.';
+
+/** D99: o número copiado agora (o ícone vira um "✓" por um instante). */
+const copiado = ref<string | null>(null);
+let temporizadorCopia: ReturnType<typeof setTimeout> | undefined;
+async function copiarNumero(numero: string) {
+  clearTimeout(temporizadorCopia);
+  try {
+    await navigator.clipboard.writeText(numero);
+    copiado.value = numero;
+    temporizadorCopia = setTimeout(() => (copiado.value = null), 1500);
+  } catch {
+    copiado.value = null;
+  }
 }
+onUnmounted(() => clearTimeout(temporizadorCopia));
 
 function dicaAdvogados(idProcesso?: number): string {
   if (idProcesso === undefined) return '';
@@ -350,10 +362,31 @@ const ehDestaque = (dia: string, l: LinhaPauta) =>
                       </td>
                       <template v-else>
                         <td class="numero">
-                          <a :href="urlProcesso(l.idProcesso)" target="_blank" rel="noopener noreferrer" title="Abrir o processo numa aba nova">{{ l.nrProcesso ?? l.idProcesso }}</a>
+                          <span class="numero-com-copia">
+                            <a :href="urlProcesso(l.idProcesso)" target="_blank" rel="noopener noreferrer" title="Abrir o processo numa aba nova">{{ l.nrProcesso ?? l.idProcesso }}</a>
+                            <!-- D99: copiar o número; o ícone é um SVG nosso, sem pacote de ícones (D100). -->
+                            <button
+                              v-if="l.nrProcesso"
+                              :class="['botao-copiar', { copiado: copiado === l.nrProcesso }]"
+                              type="button"
+                              :title="copiado === l.nrProcesso ? 'Copiado!' : 'Copiar o número'"
+                              :aria-label="copiado === l.nrProcesso ? 'Copiado!' : `Copiar o número ${l.nrProcesso}`"
+                              @click="copiarNumero(l.nrProcesso)"
+                            >
+                              <svg v-if="copiado === l.nrProcesso" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M3 8.5l3.2 3L13 4.5" />
+                              </svg>
+                              <svg v-else viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
+                                <rect x="5.5" y="5.5" width="8" height="8.5" rx="1.5" />
+                                <path d="M10.5 3.5V3a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 3v6.5A1.5 1.5 0 0 0 4 11h1.5" />
+                              </svg>
+                            </button>
+                          </span>
                         </td>
                         <td class="partes-linha">
-                          {{ partes(l) }}
+                          <template v-if="l.segredo">Segredo de justiça</template>
+                          <!-- Numa linha só: o Vue não descarta os espaços entre os nomes e o "(+)". -->
+                          <template v-else>{{ l.poloAtivo?.nome ?? '—' }}<span v-if="l.poloAtivo?.varios" class="mais-partes" :title="DICA_MAIS_PARTES"> (+)</span> × {{ l.poloPassivo?.nome ?? '—' }}<span v-if="l.poloPassivo?.varios" class="mais-partes" :title="DICA_MAIS_PARTES"> (+)</span></template>
                           <button
                             v-if="l.idProcesso !== undefined && !l.segredo"
                             class="ajuda botao-ajuda"
@@ -466,7 +499,7 @@ const ehDestaque = (dia: string, l: LinhaPauta) =>
 .tabela-pauta td { padding: 4px 8px; vertical-align: middle; }
 .tabela-pauta .hora { width: 52px; font-variant-numeric: tabular-nums; }
 .tabela-pauta .sala-linha { width: 150px; color: var(--cor-suave); }
-.tabela-pauta .numero { width: 210px; }
+.tabela-pauta .numero { width: 236px; }
 .tabela-pauta .numero a { color: var(--cor-marca); text-decoration: none; font-variant-numeric: tabular-nums; }
 .tabela-pauta .numero a:hover { text-decoration: underline; }
 .tabela-pauta .tipo-linha { width: 34%; }
@@ -480,5 +513,30 @@ const ehDestaque = (dia: string, l: LinhaPauta) =>
 .selo-digital { margin-left: 6px; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 999px; background: #e8f0fe; color: #1a56c4; white-space: nowrap; }
 .linha-audiencia.destaque td { background: var(--cor-aviso-fundo); font-weight: 600; }
 .botao-ajuda { border: 0; background: none; padding: 0 2px; font: inherit; }
+/* D99: o "(+)" do polo explica a si mesmo. */
+.mais-partes { cursor: help; color: var(--cor-suave); }
+.numero-com-copia { display: inline-flex; align-items: center; gap: 4px; }
+.botao-copiar { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; padding: 0; border: 1px solid transparent; border-radius: 4px; background: none; color: var(--cor-suave); cursor: pointer; }
+.botao-copiar:hover, .botao-copiar:focus-visible { border-color: var(--cor-borda); color: var(--cor-marca); }
+.botao-copiar.copiado { color: var(--cor-ok); }
+.botao-copiar svg { width: 14px; height: 14px; }
 .fim-pauta { display: flex; justify-content: center; padding: 16px 0; }
+
+/* Os diálogos do "+" e do "×" abrem por cima da Pauta, numa janela menor. O CSS deles fica aqui, e
+   não no componente de cada um: o de um componente só entra quando ele aparece pela primeira vez. */
+.fundo-acao { z-index: 2147483647; }
+.janela-acao { max-width: 680px; }
+.faixa-simulacao-acao {
+  background: var(--cor-erro-fundo); color: var(--cor-erro); font-weight: 700; font-size: 12px;
+  text-align: center; padding: 6px 10px; border-bottom: 1px solid #f1c4bf;
+}
+.faixa-real-acao {
+  background: #fff1e0; color: #8a4500; font-weight: 700; font-size: 12px;
+  text-align: center; padding: 6px 10px; border-bottom: 2px solid #f0a14a;
+}
+/* D99: o "Fechar" fica sempre na linha da ação, na ponta direita, e nunca vira outro botão. */
+.botao-fechar-acao { margin-left: auto; }
+/* D42, como no Individual: campo que não se aplica fica visivelmente desabilitado. */
+.janela-acao select:disabled, .janela-acao input:disabled { background: #d5dbe3; color: #5b6878; border-color: #c3cad4; cursor: not-allowed; }
+.janela-acao button:disabled { cursor: not-allowed; }
 </style>

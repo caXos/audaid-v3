@@ -150,6 +150,13 @@ async function responder(url: string, init?: RequestInit): Promise<Response> {
       return json(itens ? { dia, pautasDoDia: itens } : { dia });
     }
     if (/\/processos\/id\/\d+\/partes$/.test(u.pathname)) return json(partes);
+    // D99: as sugestões do número (a busca do painel), na forma confirmada em 09/11/2026; o 101 vem
+    // em dois agrupamentos.
+    if (u.pathname.endsWith('/agrupamentotarefas/processos')) {
+      const prefixo = u.searchParams.get('numero') ?? '';
+      const achados = Object.entries(NUMEROS).filter(([n]) => n.startsWith(prefixo));
+      return json(achados.flatMap(([n, id]) => [8, ...(id === 101 ? [9] : [])].map((g) => ({ idAgrupamentoProcesso: g, idProcesso: id, numeroProcessoCompleto: n }))));
+    }
     // O "+" (D89d): a busca por número, o processo, as audiências dele e os tipos.
     if (u.pathname.endsWith('/processos') && u.searchParams.has('numero')) {
       const id = NUMEROS[u.searchParams.get('numero') ?? ''];
@@ -449,6 +456,17 @@ describe('a janela da Pauta', () => {
     expect(css).toMatch(/\.pauta-janela\s*\{[^}]*position:\s*absolute/);
     expect(raiz.textContent).not.toContain('AudAid · Pauta · diagnóstico');
   });
+
+  // O mesmo para os diálogos: o CSS comum ao "+" e ao "×" estava no do "+"; abrir o "×" antes ficava sem ele.
+  it('o CSS comum aos diálogos do "+" e do "×" entra sem abrir nenhum deles', async () => {
+    const { raiz } = await abrir();
+    const css = [...raiz.querySelectorAll('style')].map((s) => s.textContent ?? '').join('\n');
+    expect(css).toMatch(/\.fundo-acao\s*\{/);
+    expect(css).toMatch(/\.janela-acao\s*\{/);
+    expect(css).toMatch(/\.faixa-real-acao\s*\{/);
+    expect(css).toMatch(/\.botao-fechar-acao\s*\{[^}]*margin-left:\s*auto/);
+    expect(raiz.querySelector('.janela-acao')).toBeNull();
+  });
 });
 
 describe('o mês da sala (D92, prova técnica de 06/11/2026)', () => {
@@ -538,11 +556,67 @@ describe('o "+" e o "×" no órgão logado (entrega 2, D89b–D89e)', () => {
     await mudar(tipoBase(j), 'Conciliação');
     const enviar = botoes(j, /^Simular designação$/)[0]!;
     await vi.waitFor(() => expect(enviar.disabled).toBe(false));
+    // D99: o "Fechar" na linha da ação, por último (à direita).
+    const rodape = j.querySelector('.rodape-form')!;
+    expect(rodape.lastElementChild?.textContent?.trim()).toBe('Fechar');
     enviar.click();
     await vi.waitFor(() => expect(j.textContent).toContain('Simulação concluída'));
     expect(j.textContent).toMatch(/"horarioInicial": "09:10"/);
     expect(j.textContent).not.toContain('Recarregar a página');
     expect(escritas()).toEqual([]);
+    // D99: executado uma vez, o botão da ação fica desabilitado, e o "Fechar" continua ali.
+    expect(enviar.disabled).toBe(true);
+    expect(rodape.textContent).toContain('Já executado. Para outra, feche e abra de novo.');
+    expect(rodape.lastElementChild?.textContent?.trim()).toBe('Fechar');
+    (rodape.lastElementChild as HTMLButtonElement).click();
+    await nextTick();
+    expect(raiz.querySelector('.janela-acao')).toBeNull();
+  });
+
+  it('D99: o campo do número abre com o foco, mascara e sugere pelo PJe; escolher a sugestão já busca', async () => {
+    const { raiz, dia } = await abrirComVaga();
+    dia(D1).querySelector<HTMLButtonElement>('.botao-mais')!.click();
+    await nextTick();
+    const campo = janela(raiz).querySelector<HTMLInputElement>('#designar-numero')!;
+    expect(raiz.activeElement).toBe(campo);
+    await mudar(campo, '101-');
+    expect(campo.value).toBe('0000101-');
+    // O 101 vem em dois agrupamentos e aparece uma vez só.
+    await vi.waitFor(() => expect(janela(raiz).querySelectorAll('.lista-sugestoes li')).toHaveLength(1));
+    expect(lidos).toContain('/pje-comum-api/api/agrupamentotarefas/processos?numero=0000101-');
+    expect(janela(raiz).querySelector('.lista-sugestoes li')!.textContent?.trim()).toBe(N101);
+    campo.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', cancelable: true }));
+    await vi.waitFor(() => expect(janela(raiz).textContent).toContain('Designar audiência'));
+    expect(campo.value).toBe(N101);
+    expect(janela(raiz).querySelector('.lista-sugestoes')).toBeNull();
+  });
+
+  it('D99: o "+ Designar" do dia também abre com o foco no número; colar o número inteiro não pede sugestão', async () => {
+    const { raiz, dia } = await abrirComVaga();
+    botoes(dia(D1), /^\+ Designar$/)[0]!.click();
+    await nextTick();
+    const campo = janela(raiz).querySelector<HTMLInputElement>('#designar-numero')!;
+    expect(raiz.activeElement).toBe(campo);
+    await mudar(campo, `processo ${N102.replace(/\D/g, '')}.`);
+    expect(campo.value).toBe(N102);
+    await new Promise((r) => setTimeout(r, 400));
+    expect(lidos.some((l) => l.includes('agrupamentotarefas'))).toBe(false);
+  });
+
+  it('D99: o ícone depois do número copia o número; o "(+)" diz o que é', async () => {
+    const escrever = vi.fn(async (_texto: string) => {});
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: escrever } });
+    const { dia } = await abrirComVaga();
+    const linha = [...dia(D1).querySelectorAll('tr')].find((tr) => tr.textContent?.includes('AUTOR 11'))!;
+    const copiar = linha.querySelector<HTMLButtonElement>('.botao-copiar')!;
+    expect(copiar.title).toBe('Copiar o número');
+    expect(copiar.querySelector('svg')).not.toBeNull();
+    copiar.click();
+    await vi.waitFor(() => expect(copiar.title).toBe('Copiado!'));
+    expect(escrever).toHaveBeenCalledWith('0000111-52.2026.5.09.0001');
+    const mais = linha.querySelector<HTMLElement>('.mais-partes')!;
+    expect(mais.textContent?.trim()).toBe('(+)');
+    expect(mais.title).toBe('Há mais partes neste polo. O (?) mostra todas, com os advogados.');
   });
 
   it('"+" com processo que já tem audiência no órgão: avisa antes que redesigna (D89d, D32)', async () => {
@@ -593,12 +667,19 @@ describe('o "+" e o "×" no órgão logado (entrega 2, D89b–D89e)', () => {
     expect(j.textContent).toContain('Pode ser necessário despacho ou intimação.');
     // GIGS: a sugestão "Analisar".
     await mudar([...j.querySelectorAll('select')].find((s) => [...s.options].some((o) => o.textContent === 'Analisar'))!, 's1');
+    // D99: o "Fechar" está lá desde o começo, por último na linha da ação, e não muda de nome.
+    const linhaAcao = botoes(j, /^Simular o cancelamento$/)[0]!.parentElement!;
+    expect(linhaAcao.lastElementChild?.textContent?.trim()).toBe('Fechar');
+    expect(botoes(j, /^Voltar$/)).toEqual([]);
     botoes(j, /^Simular o cancelamento$/)[0]!.click();
     await vi.waitFor(() => expect(j.textContent).toContain('Simulação concluída'));
     expect(j.textContent).toContain('PATCH https://pje.trt9.jus.br/pje-comum-api/api/pautasaudiencias/audiencias/cancelamento');
     expect(j.textContent).toMatch(/\[\s*9011\s*\]/);
     expect(j.textContent).toContain('Lançar o GIGS');
     expect(escritas()).toEqual([]);
+    expect(botoes(j, /^Simular o cancelamento$/)[0]!.disabled).toBe(true);
+    expect(linhaAcao.lastElementChild?.textContent?.trim()).toBe('Fechar');
+    expect((linhaAcao.lastElementChild as HTMLButtonElement).disabled).toBe(false);
   });
 
   it('"×" real: cancela, confirma relendo o dia, e a Pauta relê o dia', async () => {

@@ -2,6 +2,7 @@
 // grava no PJe. As leituras novas (perfis, AUD4) vêm da v1 e são lidas de forma defensiva até a
 // prova técnica (D86b) confirmar a forma de cada resposta.
 
+import { extrairNumeros } from '../regras/numeros';
 import { lerPartes } from '../regras/partes';
 import { dicaAdvogados } from '../lote/apresentacao';
 import { caminhos, type EventoCalendario, type PautaDia, type RespostaPartes, type Sala } from '../pje/api';
@@ -114,6 +115,24 @@ export async function carregarDia(ler: LeitorPauta, idSala: number, dia: string)
 export async function carregarCalendario(ler: LeitorPauta, idOrgao: number): Promise<EventoCalendario[]> {
   const r = await ler<EventoCalendario[]>(caminhos.calendario(idOrgao));
   return r.ok && Array.isArray(r.dados) ? r.dados : [];
+}
+
+/** Quantas sugestões o campo do número mostra. */
+export const SUGESTOES_MAXIMAS = 8;
+
+/**
+ * D99: as sugestões do campo do número, pela busca do painel do PJe. Forma confirmada pelo usuário
+ * em 09/11/2026: `[{ idAgrupamentoProcesso, idProcesso, numeroProcessoCompleto }]`, e `[]` quando
+ * nada começa assim. O mesmo processo pode vir em mais de um agrupamento: aparece uma vez só. Só
+ * ficam os que começam com o que foi digitado. Erro vira lista vazia: sugestão nunca atrapalha.
+ */
+export async function sugerirNumeros(ler: LeitorPauta, prefixo: string): Promise<string[]> {
+  const r = await ler<unknown>(caminhos.processosPorPrefixo(prefixo));
+  if (!r.ok || !Array.isArray(r.dados)) return [];
+  const numeros = r.dados
+    .map((item) => (ehObjeto(item) ? extrairNumeros(String(item['numeroProcessoCompleto'] ?? ''))[0] : undefined))
+    .filter((n): n is string => n !== undefined && n.startsWith(prefixo));
+  return [...new Set(numeros)].slice(0, SUGESTOES_MAXIMAS);
 }
 
 /** O "(?)" da linha (D61, D92): os advogados de cada parte, lidos só quando pedidos. */

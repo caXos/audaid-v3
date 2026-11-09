@@ -3,7 +3,8 @@
 // logado. O processo é conferido como na tela 1 do Lote (D27) e o resto é o formulário do Individual:
 // tipo composto, 100% Digital com Julgamento (D26), GIGS, confirmação no envio real e a
 // redesignação da D32 quando o processo já tem audiência no órgão.
-import { computed, ref, shallowRef } from 'vue';
+import { computed, onMounted, ref, shallowRef } from 'vue';
+import CampoNumeroProcesso from '../componentes/CampoNumeroProcesso.vue';
 import type { Opcoes } from '../config/opcoes';
 import type { ResultadoExecucao } from '../fluxo/executor';
 import { carregarDados, type Dados } from '../individual/dados';
@@ -12,6 +13,7 @@ import { resolverLista } from '../lote/resolver';
 import type { Ambiente } from '../pje/ambiente';
 import { extrairNumeros } from '../regras/numeros';
 import { formatarDataHora } from '../ui/dom';
+import { sugerirNumeros } from './dados';
 import { leitorDoPje } from './estadoPauta';
 import { rotuloDoDia } from './orgaos';
 
@@ -36,6 +38,12 @@ const buscando = ref(false);
 const motivo = ref('');
 const dados = shallowRef<Dados | null>(null);
 const ler = leitorDoPje(props.ambiente);
+const campo = ref<{ focar(): void } | null>(null);
+/** D99: as sugestões do PJe para o que foi digitado (a busca do painel). */
+const sugerir = (prefixo: string) => sugerirNumeros(ler, prefixo);
+
+// D99: o diálogo abre com o cursor no número.
+onMounted(() => campo.value?.focar());
 
 const titulo = computed(
   () => `Designar · ${rotuloDoDia(props.dia)} · ${props.sala ? props.sala.nome : 'escolha a sala no formulário'}${props.hora ? ` · ${props.hora}` : ''}`,
@@ -96,15 +104,7 @@ function aoConcluir(_r: ResultadoExecucao, gravou: boolean) {
           <div class="cartao-topo"><h2>Processo</h2></div>
           <div class="cartao-corpo">
             <form class="linha-form" @submit.prevent="buscar()">
-              <input
-                id="designar-numero"
-                v-model="numero"
-                class="campo-numero"
-                type="text"
-                placeholder="0000000-00.0000.0.00.0000"
-                autocomplete="off"
-                :disabled="buscando"
-              />
+              <CampoNumeroProcesso id="designar-numero" ref="campo" v-model="numero" :desabilitado="buscando" :sugerir="sugerir" @escolher="buscar()" />
               <button class="acao secundaria" type="submit" :disabled="buscando">{{ buscando ? 'Buscando…' : 'Buscar' }}</button>
             </form>
             <p v-if="motivo" class="erro-texto">{{ motivo }}</p>
@@ -125,27 +125,19 @@ function aoConcluir(_r: ResultadoExecucao, gravou: boolean) {
           :fixos="fixos"
           :sem-recarregar="true"
           :ao-concluir="aoConcluir"
-        />
+          :uma-vez="true"
+        >
+          <!-- D99: o "Fechar" fica fixo, na linha da ação, à direita; nenhum botão vira outro. -->
+          <template #fim>
+            <button class="acao secundaria botao-fechar-acao" type="button" @click="aoFechar()">Fechar</button>
+          </template>
+        </FormularioIndividual>
       </div>
     </div>
   </div>
 </template>
 
 <style>
-/* Os diálogos do "+" e do "×" abrem por cima da Pauta, numa janela menor. */
-.fundo-acao { z-index: 2147483647; }
-.janela-acao { max-width: 680px; }
-.faixa-simulacao-acao {
-  background: var(--cor-erro-fundo); color: var(--cor-erro); font-weight: 700; font-size: 12px;
-  text-align: center; padding: 6px 10px; border-bottom: 1px solid #f1c4bf;
-}
-.faixa-real-acao {
-  background: #fff1e0; color: #8a4500; font-weight: 700; font-size: 12px;
-  text-align: center; padding: 6px 10px; border-bottom: 2px solid #f0a14a;
-}
-.campo-numero { width: 240px; font-variant-numeric: tabular-nums; }
+/* O CSS comum aos diálogos do "+" e do "×" fica no PainelPauta.vue, que está sempre na tela. */
 .aviso-redesignacao { color: var(--cor-aviso); background: var(--cor-aviso-fundo); border: 1px solid #e6c46a; border-radius: 6px; padding: 6px 8px; font-weight: 600; }
-/* D42, como no Individual: campo que não se aplica fica visivelmente desabilitado. */
-.janela-acao select:disabled, .janela-acao input:disabled { background: #d5dbe3; color: #5b6878; border-color: #c3cad4; cursor: not-allowed; }
-.janela-acao button:disabled { cursor: not-allowed; }
 </style>

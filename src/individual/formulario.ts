@@ -33,6 +33,11 @@ export interface ExtrasFormulario {
   fixos?: FixosFormulario;
   /** Chamado ao fim de cada execução; `gravou` = gravou de verdade no PJe (a Pauta relê o dia). */
   aoConcluir?: (resultado: ResultadoExecucao, gravou: boolean) => void;
+  /**
+   * D99: depois de executar, o botão da ação fica desabilitado, para não repetir a designação com
+   * um clique a mais. Para outra, fecha-se e abre-se de novo (o "+" da Pauta).
+   */
+  umaVez?: boolean;
 }
 
 export function useFormulario(ambiente: Ambiente, d: Dados, opcoes: Opcoes, simulando: boolean, extras: ExtrasFormulario = {}) {
@@ -112,9 +117,13 @@ export function useFormulario(ambiente: Ambiente, d: Dados, opcoes: Opcoes, simu
     ...(extras.aoConcluir ? { aoConcluir: extras.aoConcluir } : {}),
   });
 
+  const jaExecutou = computed(() => Boolean(extras.umaVez) && envio.estado.tela.tipo === 'concluido');
+
   // Na ordem em que aparecem na tela.
   const pendencias = computed(() =>
     [
+      // D99: diz por que o botão ficou desabilitado depois de executar.
+      ...(jaExecutou.value ? ['Já executado. Para outra, feche e abra de novo.'] : []),
       ...(sala.value ? [] : ['Escolha a sala.']),
       ...avaliacaoData.value.pendencias,
       ...avaliacaoHora.value.pendencias,
@@ -132,7 +141,7 @@ export function useFormulario(ambiente: Ambiente, d: Dados, opcoes: Opcoes, simu
           ? 'Redesignar'
           : 'Designar',
   );
-  const podeEnviar = computed(() => !envio.estado.executando && !envio.estado.confirmando && pendencias.value.length === 0);
+  const podeEnviar = computed(() => !envio.estado.executando && !envio.estado.confirmando && !jaExecutou.value && pendencias.value.length === 0);
 
   function dadosDoEnvio(): DadosDoEnvio | null {
     const s = sala.value;

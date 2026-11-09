@@ -22,6 +22,11 @@ export const caminhos = {
     `/audapi/rest/pje/audpje/pautas?dataInicio=${inicio}&dataFim=${fim}&orgaoJulgador=${idOrgao}`,
   /** Os órgãos do tribunal, com `nomeMunicipio` (AUD4; pede o token como Bearer). */
   orgaosDoTribunal: () => '/audapi/rest/pje/audpje/oj',
+  /**
+   * Os processos do órgão logado cujo número começa com `prefixo` ("0000369-"): é a busca do painel
+   * do PJe, vista no teste de 09/11/2026 (D99). Serve às sugestões do campo do número.
+   */
+  processosPorPrefixo: (prefixo: string) => `/pje-comum-api/api/agrupamentotarefas/processos?numero=${encodeURIComponent(prefixo)}`,
 };
 
 export interface OrgaoJulgador {

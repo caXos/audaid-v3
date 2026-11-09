@@ -133,13 +133,13 @@ async function copiar() {
               <CampoGigs :estado="gigs" :dados-variaveis="dadosVariaveis" />
             </GradeCampos>
             <p v-if="gigs.pendencia" class="aviso-texto">{{ gigs.pendencia }}</p>
+            <!-- D99: a ação só uma vez (depois, desabilitada); o "Fechar" sempre ali, à direita, com o mesmo nome. -->
             <div class="linha-form">
               <button class="acao perigo" type="button" :disabled="e.fase !== 'pergunta' || Boolean(gigs.pendencia)" @click="cancelar()">
                 {{ simulando ? 'Simular o cancelamento' : 'Cancelar a audiência no PJe' }}
               </button>
-              <button class="acao secundaria" type="button" :disabled="e.fase === 'executando'" @click="aoFechar()">
-                {{ e.fase === 'concluido' ? 'Fechar' : 'Voltar' }}
-              </button>
+              <span v-if="e.fase === 'concluido'" class="suave">Já executado. Para outro, feche e abra de novo.</span>
+              <button class="acao secundaria botao-fechar-acao" type="button" :disabled="e.fase === 'executando'" @click="aoFechar()">Fechar</button>
             </div>
           </div>
         </section>

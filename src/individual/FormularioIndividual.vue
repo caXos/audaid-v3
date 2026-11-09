@@ -25,11 +25,14 @@ const props = defineProps<{
   /** Na Pauta: sem o "Recarregar a página?" (a Pauta relê o dia sozinha). */
   semRecarregar?: boolean;
   aoConcluir?: (resultado: ResultadoExecucao, gravou: boolean) => void;
+  /** Na Pauta (D99): depois de executar, o botão da ação fica desabilitado. */
+  umaVez?: boolean;
 }>();
 
 const f = useFormulario(props.ambiente, props.dados, props.opcoes, props.simulando, {
   ...(props.fixos ? { fixos: props.fixos } : {}),
   ...(props.aoConcluir ? { aoConcluir: props.aoConcluir } : {}),
+  ...(props.umaVez ? { umaVez: true } : {}),
 });
 const dialogoPauta = ref<{ abrir(): void } | null>(null);
 </script>
@@ -68,6 +71,8 @@ const dialogoPauta = ref<{ abrir(): void } | null>(null);
         <ul class="pendencias">
           <li v-for="p in f.pendencias" :key="p">{{ p }}</li>
         </ul>
+        <!-- O fim da linha da ação: o "Fechar" do "+" da Pauta (D99). -->
+        <slot name="fim" />
       </div>
     </div>
   </section>
