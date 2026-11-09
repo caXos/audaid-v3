@@ -19,8 +19,8 @@ Extensão para **Firefox, Chrome e Edge** que ajuda assistentes de audiência do
 
 ## Estado
 
-**Enviada às lojas em 05/11/2026: 3.1**, com o Controle em Lote. **Pronta para publicar: 3.2**, com
-a Pauta. Nas versões de desenvolvimento, o **modo simulação vem ligado por padrão**: para gravar de
+**Enviadas às lojas: 3.1** (05/11/2026), com o Controle em Lote, e **3.2** (09/11/2026), com a
+Pauta. Nas versões de desenvolvimento, o **modo simulação vem ligado por padrão**: para gravar de
 verdade, desligue-o nas Opções. No modo real, o AudAid mostra uma faixa de aviso e pede confirmação,
 com o resumo do que será gravado, antes de cada envio.
 
