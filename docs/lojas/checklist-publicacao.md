@@ -21,6 +21,10 @@ em `pacotes/` os três arquivos da versão. Os pacotes de outras versões que j�
 Antes de enviar, confira:
 - [ ] `npx web-ext lint --source-dir dist/firefox` sem **erros**. Os 4 avisos são esperados: 2 sobre `data_collection_permissions` e, desde a 3.1, 1 de `innerHTML` no `content.js` e 1 no `opcoes.js`, que vêm do runtime do Vue e estão explicados nas notas para o revisor da AMO;
 - [ ] carregue `dist/firefox` e `dist/chrome` uma vez e confira: termos abrem, botão aparece, Opções **sem** simulação ligada;
+- [ ] **no Chrome, carregue o zip do Chrome descompactado**, não só o `dist/chrome`, num perfil
+  separado (`chrome://extensions` → modo do desenvolvedor → "Carregar sem compactação"). **Nenhuma
+  mensagem de erro pode aparecer ao carregar.** A 3.2.0 só foi testada no Firefox e não carregava
+  no Chrome (veja "Se a Chrome Web Store recusar");
 - [ ] depois, `npm run build` para voltar o `dist/` ao build de desenvolvimento.
 
 Se a política de privacidade mudou (como na 3.1, termos v3, e na 3.2, termos v4), **mescle no `main`
@@ -61,10 +65,17 @@ A listagem já existe (a 3.0 foi publicada). Para uma versão nova:
 
 ### Se a Chrome Web Store recusar
 
-Aconteceu com a 3.2.0, em 09/11/2026: "Yellow Magnesium" (funcionalidade que não funciona), numa
-revisão automática, com a aba "Instruções de teste" vazia. A versão anterior continua publicada.
+Aconteceu com a 3.2.0, recusada **duas vezes** em 09/11/2026 por "Yellow Magnesium" (funcionalidade
+que não funciona). A versão anterior continua publicada. **A causa era um erro de carga:** o
+`content.js` tinha um U+FFFF (não-caractere do Unicode), e o Chrome recusa a extensão inteira com
+"Não foi possível carregar o arquivo "content.js" para o script de conteúdo. Ele não possui a
+codificação UTF-8". O Firefox aceita. Corrigido na 3.2.1, e desde então o `npm run build` falha se
+o caractere voltar. O primeiro reenvio, só com as instruções de teste, não resolveu, porque o pacote
+era o mesmo.
 - [ ] Anote o ID da violação do e-mail e procure-o em
   https://developer.chrome.com/docs/webstore/troubleshooting.
+- [ ] **Primeiro, veja se o pacote carrega** (o passo abaixo). "Yellow Magnesium" também cobre
+  pacote que não carrega, e é a causa mais fácil de confirmar.
 - [ ] Confira o zip enviado: ele precisa ser igual ao `dist/chrome` do build de release
   (descompacte e compare com `diff -r`), com o `manifest.json` na raiz.
 - [ ] Teste **o zip exato**, num perfil separado do Chrome (para não somar com a versão da loja):
