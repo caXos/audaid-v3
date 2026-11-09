@@ -54,8 +54,9 @@ A listagem já existe (a 3.0 foi publicada). Para uma versão nova:
   finalidade única e a justificativa do `storage` mudaram; na 3.2, mudaram as três (finalidade,
   `storage` e hosts), e as informações de autenticação citam o AUD4.
 - [ ] **Instruções de teste:** usuário e senha em branco; em "Instruções adicionais", o bloco em
-  inglês de `docs/lojas/instrucoes-teste-chrome.md` (revise o "THIS UPDATE" a cada versão). Sem
-  isso, o revisor não tem como ver a extensão funcionando, porque tudo exige login no PJe.
+  inglês de `docs/lojas/instrucoes-teste-chrome.md` (revise a frase da versão a cada envio). **O
+  campo aceita até 500 caracteres**: ao atualizar o bloco, conte antes de enviar. Sem isso, o
+  revisor não tem como ver a extensão funcionando, porque tudo exige login no PJe.
 - [ ] Enviar para revisão.
 
 ### Se a Chrome Web Store recusar
