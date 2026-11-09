@@ -7,8 +7,8 @@ Extensão para **Firefox, Chrome e Edge** que ajuda assistentes de audiência do
 >
 > O AudAid faz requisições ao PJe **usando a sua sessão** (os cookies e o token de segurança do
 > PJe já presentes no seu navegador), exatamente como se você estivesse clicando nas telas do PJe.
-> Tudo o que ele grava (audiências designadas ou redesignadas, atividades do GIGS, alterações do
-> Juízo 100% Digital) fica registrado **no seu nome**.
+> Tudo o que ele grava (audiências designadas, redesignadas ou canceladas, atividades do GIGS,
+> alterações do Juízo 100% Digital) fica registrado **no seu nome**, e as consultas também.
 >
 > - O AudAid só conversa com o próprio PJe do seu tribunal. **Nenhum dado é enviado a qualquer
 >   outro servidor**, nem ao autor da extensão.
@@ -19,12 +19,18 @@ Extensão para **Firefox, Chrome e Edge** que ajuda assistentes de audiência do
 
 ## Estado
 
-**Publicada: versão 3.0** (Controle Individual) na AMO e **3.0.1** na Chrome Web Store. **Pronta
-para publicar: 3.1**, com o Controle em Lote. Nas versões de desenvolvimento, o **modo simulação
-vem ligado por padrão**: para gravar de verdade, desligue-o nas Opções. No modo real, o AudAid
-mostra uma faixa de aviso e pede confirmação, com o resumo do que será gravado, antes de cada envio.
+**Enviada às lojas em 05/11/2026: 3.1**, com o Controle em Lote. **Pronta para publicar: 3.2**, com
+a Pauta. Nas versões de desenvolvimento, o **modo simulação vem ligado por padrão**: para gravar de
+verdade, desligue-o nas Opções. No modo real, o AudAid mostra uma faixa de aviso e pede confirmação,
+com o resumo do que será gravado, antes de cada envio.
 
-- **Controle em Lote** (o botão do AudAid fora de um processo, ou o link no Controle Individual): a
+- **Pauta** (3.2; o botão do AudAid fora de um processo → "Pauta", ou "Abrir a pauta" no Controle
+  Individual): a pauta das salas dos órgãos em que o usuário tem perfil, numa lista contínua a partir
+  de hoje, com filtros de órgão, sala e mês. Cada dia é lido só quando aparece na tela, no máximo 4
+  consultas ao mesmo tempo. "Todas as salas" junta as salas do órgão pela hora. No órgão logado, o
+  calendário com "+" designa numa vaga (ou "+ Designar" no dia), com o formulário do Individual, e a
+  lixeira cancela, uma audiência por vez, com confirmação. Nos outros órgãos, só consulta.
+- **Controle em Lote** (o botão do AudAid fora de um processo → "Controle em Lote", ou o link no Controle Individual): a
   pauta de um dia inteiro a partir de uma lista colada. Confere quem entra, monta a pauta (pelas
   vagas da sala ou em sequência, intervalos, ajustes e GIGS por processo, Auto organizar pelas
   regras das Opções), mostra a pauta da sala no PJe enquanto monta (vagas, audiências já marcadas,
@@ -36,10 +42,10 @@ mostra uma faixa de aviso e pede confirmação, com o resumo do que será gravad
   Digital e GIGS. O resultado mostra cada passo. Na simulação, mostra também a requisição que
   seria feita; no envio real, a requisição completa fica em "Copiar requisições".
 - **Termos de uso:** abrem na instalação. Até o aceite, a extensão fica inativa.
-- **Botão do AudAid** com posição e estilo configuráveis. O painel de diagnóstico (só leitura) abre
-  pelo link "Diagnóstico" do Controle Individual.
-- **Opções** (clique no ícone do AudAid na barra do navegador): botão, sugestões de GIGS, termos e
-  diagnóstico (modo simulação).
+- **Botão do AudAid** com posição e estilo configuráveis. Os painéis de diagnóstico (só leitura)
+  abrem pelo botão "Diagnóstico" do Controle Individual e da Pauta.
+- **Opções** (clique no ícone do AudAid na barra do navegador): botão, sugestões de GIGS, Pauta
+  (meses à frente e órgãos ocultos), termos e diagnóstico (modo simulação).
 - Aviso quando a versão antiga (v1) também está instalada.
 
 `npm run build` gera a versão de desenvolvimento, com o modo simulação ligado por padrão.
@@ -83,7 +89,8 @@ PJe.
 | `src/componentes/` | base do Vue (montagem no Shadow DOM) e o que o Individual e o Lote compartilham: sala, data, pauta do dia, tipo composto, GIGS, passos da execução |
 | `src/individual/` | painel do Controle Individual (Vue): os `.vue` mostram, e os `.ts` ao lado guardam o estado e as regras |
 | `src/lote/` | Controle em Lote (Vue, 3.1): lista colada e consulta dos processos, pauta (`pauta.ts`, regras puras: horários, vagas, audiências de fora), conferência (`conferencia.ts`), execução (`execucao.ts`: a ordem, o estacionamento, o reprocessamento) e rascunho |
-| `src/fluxo/` | executor da designação: passos, transporte (real/simulado), trava de escrita |
+| `src/pauta/` | Pauta (Vue, 3.2): leituras (`dados.ts`, com a fila de 4), órgãos e rótulos (`orgaos.ts`), estado da lista contínua (`estadoPauta.ts`), o "+" (`DesignarPauta.vue`, com o formulário do Individual), o cancelamento (`CancelarPauta.vue`) e o diagnóstico |
+| `src/fluxo/` | executor da designação e do cancelamento: passos, transporte (real/simulado), trava de escrita |
 | `src/prova/` | painel de diagnóstico (só leitura) |
 | `src/config/` | opções, termos e posição do botão (puro e testado) |
 | `src/ext/` | API de extensão: armazenamento e mensagens |

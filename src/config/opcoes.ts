@@ -196,7 +196,9 @@ export function normalizarOpcoes(bruto: unknown, desenvolvimento: boolean): Opco
 // v2 (23/10/2026): menciona a leitura do nome do usuário (variável {eu}, D43).
 // v3 (05/11/2026, 3.1): partes e advogados lidos pelo Lote, as audiências que já estavam na pauta e
 // o rascunho guardado no navegador (D83).
-export const VERSAO_TERMOS = 3;
+// v4 (09/11/2026, 3.2): a Pauta lê os perfis, a pauta das salas dos órgãos do usuário e o AUD4, e,
+// no órgão logado, designa e cancela; o que ela guarda no navegador (D93).
+export const VERSAO_TERMOS = 4;
 
 export interface Aceite {
   versao: number;

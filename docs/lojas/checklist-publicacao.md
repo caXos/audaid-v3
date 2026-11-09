@@ -23,8 +23,9 @@ Antes de enviar, confira:
 - [ ] carregue `dist/firefox` e `dist/chrome` uma vez e confira: termos abrem, botão aparece, Opções **sem** simulação ligada;
 - [ ] depois, `npm run build` para voltar o `dist/` ao build de desenvolvimento.
 
-Se a política de privacidade mudou (como na 3.1, termos v3), **mescle no `main` antes de enviar**: o
-GitHub Pages publica `docs/privacidade.html` a partir do `main`, e as lojas conferem o link.
+Se a política de privacidade mudou (como na 3.1, termos v3, e na 3.2, termos v4), **mescle no `main`
+antes de enviar**: o GitHub Pages publica `docs/privacidade.html` a partir do `main`, e as lojas
+conferem o link.
 
 ## 2. Firefox: addons.mozilla.org (AMO)
 
@@ -33,19 +34,24 @@ A listagem já existe (a 3.0 foi aprovada). Para uma versão nova:
 - [ ] Envie `audaid-<versão>-firefox.zip`.
 - [ ] Quando perguntar sobre código-fonte: **Sim**, envie `audaid-<versão>-fonte.zip`.
 - [ ] Notas para o revisor: o bloco em inglês de `docs/lojas/notas-revisor-amo.md`.
-- [ ] Se a descrição mudou (como na 3.1, com o Controle em Lote): atualize em **Editar página do produto**, com `docs/lojas/descricao.md`.
+- [ ] Se a descrição mudou (como na 3.1, com o Controle em Lote, e na 3.2, com a Pauta): atualize em **Editar página do produto**, com `docs/lojas/descricao.md`.
 - [ ] Capturas de tela: as mesmas da Chrome Web Store.
 
 ## 3. Chrome Web Store
 
 A listagem já existe (a 3.0 foi publicada). Para uma versão nova:
+- [ ] Confira se a versão anterior já saiu da revisão. Enquanto um item está "Aguardando revisão", o
+  painel não aceita outro pacote: espere a aprovação ou cancele a revisão pendente, e aí a nova vai no
+  lugar dela.
 - [ ] https://chrome.google.com/webstore/devconsole → AudAid → **Pacote** → **Fazer upload do novo pacote** → `audaid-<versão>-chrome.zip`.
 - [ ] **Listagem da loja:** se a descrição mudou, cole a de `docs/lojas/descricao.md` (resumo e descrição).
 - [ ] **Imagens (só você pode fazer, no PJe):** na 3.1, acrescente capturas do Controle em Lote (a
   pauta montada e o relatório da execução), 1280×800. **Esconda nomes de partes e números de
-  processo reais**, ou use processos de teste.
-- [ ] **Práticas de privacidade:** confira com `docs/lojas/justificativas-permissoes.md` (na 3.1, a
-  finalidade única e a justificativa do `storage` mudaram).
+  processo reais**, ou use processos de teste. Na 3.2, acrescente a Pauta: a lista de um dia, com
+  vagas e audiências, e o diálogo do "+", também sem nomes nem números reais.
+- [ ] **Práticas de privacidade:** confira com `docs/lojas/justificativas-permissoes.md`. Na 3.1, a
+  finalidade única e a justificativa do `storage` mudaram; na 3.2, mudaram as três (finalidade,
+  `storage` e hosts), e as informações de autenticação citam o AUD4.
 - [ ] Enviar para revisão.
 
 ## 4. Depois de publicar
